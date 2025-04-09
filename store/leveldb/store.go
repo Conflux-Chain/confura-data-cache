@@ -17,7 +17,7 @@ import (
 var keyNextBlockNumber = []byte("nextBlockNumber")
 
 // Store provides operations on a LevelDB database.
-type Store struct {
+type Store[T types.BlockData] struct {
 	db *leveldb.DB
 
 	// next block number to write in sequence
@@ -31,7 +31,7 @@ type Store struct {
 // NewStore opens or creates a DB for the given path.
 //
 // If corruption detected for an existing DB, it will try to recover the DB.
-func NewStore(path string) (*Store, error) {
+func NewStore[T types.BlockData](path string) (*Store[T], error) {
 	// open or create database
 	db, err := leveldb.OpenFile(path, nil)
 	if dberrors.IsCorrupted(err) {
@@ -45,7 +45,7 @@ func NewStore(path string) (*Store, error) {
 		return nil, errors.WithMessagef(err, "Failed to open file %v", path)
 	}
 
-	store := Store{
+	store := Store[T]{
 		db: db,
 
 		keyBlockHash2NumberPool:  NewKeyPool("bh", 32),
@@ -67,7 +67,7 @@ func NewStore(path string) (*Store, error) {
 }
 
 // getNextBlockNumber returns the next block number in database.
-func (store *Store) getNextBlockNumber() (uint64, bool, error) {
+func (store *Store[T]) getNextBlockNumber() (uint64, bool, error) {
 	value, err := store.db.Get(keyNextBlockNumber, nil)
 	if err == nil {
 		return binary.BigEndian.Uint64(value), true, nil
@@ -81,21 +81,21 @@ func (store *Store) getNextBlockNumber() (uint64, bool, error) {
 }
 
 // Close closes the underlying LevelDB database.
-func (store *Store) Close() error {
+func (store *Store[T]) Close() error {
 	return store.db.Close()
 }
 
 // NextBlockNumber returns the next block number to write in sequence.
-func (store *Store) NextBlockNumber() uint64 {
+func (store *Store[T]) NextBlockNumber() uint64 {
 	return store.nextBlockNumber.Load()
 }
 
 // Write writes the given block data in batch. It will return error if block data not written in sequence.
 //
 // Note, this method is not thread safe!
-func (store *Store) Write(data types.EthBlockData) error {
+func (store *Store[T]) Write(data T) error {
 	// ensure block data written in sequence
-	blockNumber := data.Block.Number.Uint64()
+	blockNumber := data.BlockNumber()
 	if next := store.nextBlockNumber.Load(); next != blockNumber {
 		return errors.Errorf("Block data not written in sequence, expected = %v, actual = %v", next, blockNumber)
 	}
@@ -107,14 +107,22 @@ func (store *Store) Write(data types.EthBlockData) error {
 	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
 
 	// block hash -> block number
-	keyBlockHash2Number := store.keyBlockHash2NumberPool.Get(data.Block.Hash.Bytes())
+	keyBlockHash2Number := store.keyBlockHash2NumberPool.Get(data.BlockHash().Bytes())
 	defer store.keyBlockHash2NumberPool.Put(keyBlockHash2Number)
 	batch.Put(*keyBlockHash2Number, blockNumberBuf[:])
 
 	// block number -> block
 	keyBlockNumber2Block := store.keyBlockNumber2BlockPool.Get(blockNumberBuf[:])
 	defer store.keyBlockNumber2BlockPool.Put(keyBlockNumber2Block)
-	blockJson, _ := json.Marshal(data.Block)
+
+	// write block
+	var blockJson []byte
+	switch v := any(data).(type) {
+	case types.EthBlockData:
+		blockJson, _ = json.Marshal(v.Block)
+	case types.CfxBlockData:
+		blockJson, _ = json.Marshal(v.Block)
+	}
 	batch.Put(*keyBlockNumber2Block, blockJson)
 
 	// TODO write txs
@@ -136,7 +144,7 @@ func (store *Store) Write(data types.EthBlockData) error {
 }
 
 // GetBlockByHash returns block for the given block hash. If not found, returns nil.
-func (store *Store) GetBlockByHash(hash common.Hash) (*ethTypes.Block, error) {
+func (store *Store[T]) GetBlockByHash(hash common.Hash) (*ethTypes.Block, error) {
 	keyBlockHash2Number := store.keyBlockHash2NumberPool.Get(hash.Bytes())
 	defer store.keyBlockHash2NumberPool.Put(keyBlockHash2Number)
 
@@ -155,7 +163,7 @@ func (store *Store) GetBlockByHash(hash common.Hash) (*ethTypes.Block, error) {
 }
 
 // GetBlockByNumber returns block for the given block number. If not found, returns nil.
-func (store *Store) GetBlockByNumber(number uint64) (*ethTypes.Block, error) {
+func (store *Store[T]) GetBlockByNumber(number uint64) (*ethTypes.Block, error) {
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], number)
 
