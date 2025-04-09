@@ -1,9 +1,10 @@
-package cache
+package nearhead
 
 import (
 	"container/list"
 	"sync"
 
+	cdcTypes "github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -11,9 +12,7 @@ import (
 
 // EthCache is used to cache near head data
 type EthCache struct {
-	blocks   map[uint64]*types.Block
-	receipts map[uint64][]*types.Receipt
-	traces   map[uint64][]types.LocalizedTrace
+	blockNumber2Blocks map[uint64]*cdcTypes.EthBlockData
 
 	blockNumbers list.List
 	blockHashes  map[common.Hash]uint64
@@ -24,31 +23,34 @@ type EthCache struct {
 
 func MustNewEthCache() *EthCache {
 	return &EthCache{
-		blocks:   make(map[uint64]*types.Block),
-		receipts: make(map[uint64][]*types.Receipt),
-		traces:   make(map[uint64][]types.LocalizedTrace),
-
-		blockNumbers: *list.New(),                       // for evict from list front
-		blockHashes:  make(map[common.Hash]uint64),      // mapping from block hash to number, for query by block hash
-		transactions: make(map[common.Hash]Transaction), // mapping from tx hash to block number and tx index, for query by tx hash
+		blockNumber2Blocks: make(map[uint64]*cdcTypes.EthBlockData),
+		blockNumbers:       *list.New(),                       // for evict from list front
+		blockHashes:        make(map[common.Hash]uint64),      // mapping from block hash to number, for query by block hash
+		transactions:       make(map[common.Hash]Transaction), // mapping from tx hash to block number and tx index, for query by tx hash
 	}
 }
 
-// Set is used to add near head data to memory cache
-func (c *EthCache) Set(block *types.Block, receipts []*types.Receipt, traces []types.LocalizedTrace) error {
+// Put is used to add near head data to memory cache
+func (c *EthCache) Put(data *cdcTypes.EthBlockData) error {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
+	nextBlockNumber := uint64(0)
+	lastBlockNumber := c.blockNumbers.Front()
+	if lastBlockNumber != nil {
+		nextBlockNumber = lastBlockNumber.Value.(uint64) + 1
+	}
+	if nextBlockNumber != data.Block.Number.Uint64() {
+		return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", nextBlockNumber, data.Block.Number.Uint64())
+	}
+
 	// TODO evict if exceeds maxsize
 
-	bn := block.Number.Uint64()
-	c.blocks[bn] = block
-	c.receipts[bn] = receipts
-	c.traces[bn] = traces
-
+	bn := data.Block.Number.Uint64()
+	c.blockNumber2Blocks[bn] = data
 	c.blockNumbers.PushFront(bn)
-	c.blockHashes[block.Hash] = bn
-	for _, tx := range block.Transactions.Transactions() {
+	c.blockHashes[data.Block.Hash] = bn
+	for _, tx := range data.Block.Transactions.Transactions() {
 		c.transactions[tx.Hash] = Transaction{
 			blockNumber:      bn,
 			transactionIndex: *tx.TransactionIndex,
@@ -60,24 +62,24 @@ func (c *EthCache) Set(block *types.Block, receipts []*types.Receipt, traces []t
 
 // GetBlockByNumber returns block with given number.
 func (c *EthCache) GetBlockByNumber(blockNumber uint64, isFull bool) (*types.Block, bool) {
-	block, exists := c.blocks[blockNumber]
+	data, exists := c.blockNumber2Blocks[blockNumber]
 	if !exists {
 		return nil, false
 	}
 
 	if !isFull {
 		hashes := make([]common.Hash, 0)
-		for _, tx := range block.Transactions.Transactions() {
+		for _, tx := range data.Block.Transactions.Transactions() {
 			hashes = append(hashes, tx.Hash)
 		}
 		txOrHashList := types.NewTxOrHashListByHashes(hashes)
 
-		blockClone := *block
+		blockClone := *data.Block
 		blockClone.Transactions = *txOrHashList
 		return &blockClone, exists
 	}
 
-	return block, exists
+	return data.Block, exists
 }
 
 // GetBlockByHash returns block with given block hash.
@@ -97,12 +99,12 @@ func (c *EthCache) GetTransactionByHash(txHash common.Hash) (*types.TransactionD
 		return nil, false
 	}
 
-	block, exists := c.blocks[txCache.blockNumber]
+	data, exists := c.blockNumber2Blocks[txCache.blockNumber]
 	if !exists {
 		return nil, false
 	}
 
-	tx := block.Transactions.Transactions()[txCache.transactionIndex]
+	tx := data.Block.Transactions.Transactions()[txCache.transactionIndex]
 	return &tx, true
 }
 
@@ -113,8 +115,8 @@ func (c *EthCache) GetBlockReceipts(blockNumOrHash types.BlockNumberOrHash) ([]*
 	}
 
 	if blockNumOrHash.BlockNumber != nil {
-		receipts, exists := c.receipts[uint64(blockNumOrHash.BlockNumber.Int64())]
-		return receipts, exists, nil
+		data, exists := c.blockNumber2Blocks[uint64(blockNumOrHash.BlockNumber.Int64())]
+		return data.Receipts, exists, nil
 	}
 
 	blockNumber, exists := c.blockHashes[*blockNumOrHash.BlockHash]
@@ -122,8 +124,8 @@ func (c *EthCache) GetBlockReceipts(blockNumOrHash types.BlockNumberOrHash) ([]*
 		return nil, false, nil
 	}
 
-	receipts, exists := c.receipts[blockNumber]
-	return receipts, exists, nil
+	data, exists := c.blockNumber2Blocks[blockNumber]
+	return data.Receipts, exists, nil
 }
 
 // GetTransactionReceipt returns transaction receipt by transaction hash.
@@ -133,12 +135,12 @@ func (c *EthCache) GetTransactionReceipt(txHash common.Hash) (*types.Receipt, bo
 		return nil, false
 	}
 
-	receipts, exists := c.receipts[txCache.blockNumber]
+	data, exists := c.blockNumber2Blocks[txCache.blockNumber]
 	if !exists {
 		return nil, false
 	}
 
-	receipt := receipts[txCache.transactionIndex]
+	receipt := data.Receipts[txCache.transactionIndex]
 	return receipt, true
 }
 
@@ -149,8 +151,8 @@ func (c *EthCache) GetBlockTraces(blockNumOrHash types.BlockNumberOrHash) ([]typ
 	}
 
 	if blockNumOrHash.BlockNumber != nil {
-		receipts, exists := c.traces[uint64(blockNumOrHash.BlockNumber.Int64())]
-		return receipts, exists, nil
+		data, exists := c.blockNumber2Blocks[uint64(blockNumOrHash.BlockNumber.Int64())]
+		return data.Traces, exists, nil
 	}
 
 	blockNumber, exists := c.blockHashes[*blockNumOrHash.BlockHash]
@@ -158,8 +160,8 @@ func (c *EthCache) GetBlockTraces(blockNumOrHash types.BlockNumberOrHash) ([]typ
 		return nil, false, nil
 	}
 
-	traces, exists := c.traces[blockNumber]
-	return traces, exists, nil
+	data, exists := c.blockNumber2Blocks[blockNumber]
+	return data.Traces, exists, nil
 }
 
 // GetTransactionTraces returns all traces of given transaction.
@@ -169,10 +171,10 @@ func (c *EthCache) GetTransactionTraces(txHash common.Hash) ([]types.LocalizedTr
 		return nil, false
 	}
 
-	traces, exists := c.traces[txCache.blockNumber]
+	data, exists := c.blockNumber2Blocks[txCache.blockNumber]
 
 	txTraces := make([]types.LocalizedTrace, 0)
-	for _, trace := range traces {
+	for _, trace := range data.Traces {
 		if txHash == *trace.TransactionHash {
 			txTraces = append(txTraces, trace)
 		}
