@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func createTestStore(t *testing.T) (*Store, func()) {
+func createTestStore(t *testing.T) (*Store[types.EthBlockData], func()) {
 	path, err := os.MkdirTemp("", "confura-data-cache-")
 	assert.Nil(t, err)
 
-	store, err := NewStore(path)
+	store, err := NewStore[types.EthBlockData](path)
 	assert.Nil(t, err)
 
 	return store, func() {
