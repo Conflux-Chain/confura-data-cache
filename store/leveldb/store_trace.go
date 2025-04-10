@@ -9,13 +9,13 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func (store *Store) writeTraces(batch *leveldb.Batch, traces []types.LocalizedTrace) {
-	if len(traces) == 0 {
+func (store *Store) writeTraces(batch *leveldb.Batch, blockNumber uint64, traces []types.LocalizedTrace) {
+	if traces == nil {
 		return
 	}
 
 	var blockNumberBuf [8]byte
-	binary.BigEndian.PutUint64(blockNumberBuf[:], traces[0].BlockNumber)
+	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
 
 	store.writeJson(batch, store.keyBlockNumber2TracesPool, blockNumberBuf[:], traces)
 }

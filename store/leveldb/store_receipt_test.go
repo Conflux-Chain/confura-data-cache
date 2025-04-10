@@ -41,11 +41,13 @@ func TestStoreGetBlockReceipts(t *testing.T) {
 
 	receipts, err := store.GetBlockReceiptsByHash(common.HexToHash("0x6660"))
 	assert.Nil(t, err)
-	assert.Nil(t, receipts)
+	assert.NotNil(t, receipts)
+	assert.Equal(t, 0, len(receipts))
 
 	receipts, err = store.GetBlockReceiptsByNumber(0)
 	assert.Nil(t, err)
-	assert.Nil(t, receipts)
+	assert.NotNil(t, receipts)
+	assert.Equal(t, 0, len(receipts))
 
 	// write block 1 with txs
 	store.Write(createTestEthData(1, common.HexToHash("0x6661"),

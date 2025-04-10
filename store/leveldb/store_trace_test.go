@@ -29,7 +29,7 @@ func TestStoreGetTransactionTraces(t *testing.T) {
 	// not found
 	traces, err = store.GetTransactionTraces(common.HexToHash("0x7773"))
 	assert.Nil(t, err)
-	assert.Equal(t, 0, len(traces))
+	assert.Nil(t, traces)
 }
 
 func TestStoreGetBlockTraces(t *testing.T) {
@@ -41,10 +41,12 @@ func TestStoreGetBlockTraces(t *testing.T) {
 
 	traces, err := store.GetBlockTracesByHash(common.HexToHash("0x6660"))
 	assert.Nil(t, err)
+	assert.NotNil(t, traces)
 	assert.Equal(t, 0, len(traces))
 
 	traces, err = store.GetBlockTracesByNumber(0)
 	assert.Nil(t, err)
+	assert.NotNil(t, traces)
 	assert.Equal(t, 0, len(traces))
 
 	// write block 1 with txs
@@ -65,5 +67,5 @@ func TestStoreGetBlockTraces(t *testing.T) {
 	// not found
 	traces, err = store.GetBlockTracesByNumber(2)
 	assert.Nil(t, err)
-	assert.Equal(t, 0, len(traces))
+	assert.Nil(t, traces)
 }
