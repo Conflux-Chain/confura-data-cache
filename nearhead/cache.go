@@ -11,7 +11,7 @@ import (
 
 // EthCache is used to cache near head data
 type EthCache struct {
-	frontBlockNumber       *uint64
+	lastBlockNumber        *uint64
 	blockNumber2BlockDatas map[uint64]*types.EthBlockData
 	blockHash2BlockNumbers map[common.Hash]uint64
 	txHash2TxIndexes       map[common.Hash]TransactionIndex
@@ -33,8 +33,8 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 
 	// check block number in sequence
 	bn := data.Block.Number.Uint64()
-	if c.frontBlockNumber != nil {
-		next := *c.frontBlockNumber + 1
+	if c.lastBlockNumber != nil {
+		next := *c.lastBlockNumber + 1
 		if next != bn {
 			return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", next, bn)
 		}
@@ -43,7 +43,7 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 	// TODO evict if exceeds maxsize
 
 	c.blockNumber2BlockDatas[bn] = data
-	c.frontBlockNumber = &bn
+	c.lastBlockNumber = &bn
 	c.blockHash2BlockNumbers[data.Block.Hash] = bn
 	for i, tx := range data.Block.Transactions.Transactions() {
 		c.txHash2TxIndexes[tx.Hash] = TransactionIndex{
