@@ -43,7 +43,7 @@ func createTestData(t *testing.T) *cdcTypes.EthBlockData {
 	}
 }
 
-func TestEthCache_Set(t *testing.T) {
+func TestEthCache_Put(t *testing.T) {
 	cache := createTestCache()
 	data := createTestData(t)
 	assert.Nil(t, cache.Put(data))
