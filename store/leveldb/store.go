@@ -21,9 +21,11 @@ type Store struct {
 	nextBlockNumber atomic.Uint64
 
 	// use object pool for memory saving
-	keyBlockHash2NumberPool    *KeyPool
-	keyBlockNumber2BlockPool   *KeyPool
-	keyBlockNumber2TxCountPool *KeyPool
+	keyBlockHash2NumberPool           *KeyPool
+	keyBlockNumber2BlockPool          *KeyPool
+	keyBlockNumber2TxCountPool        *KeyPool
+	keyTxHash2BlockNumberAndIndexPool *KeyPool
+	keyBlockNumber2ReceiptsPool       *KeyPool
 }
 
 // NewStore opens or creates a DB for the given path.
@@ -46,9 +48,11 @@ func NewStore(path string) (*Store, error) {
 	store := Store{
 		db: db,
 
-		keyBlockHash2NumberPool:    NewKeyPool("bh2bn", 32),
-		keyBlockNumber2BlockPool:   NewKeyPool("bn2b", 8),
-		keyBlockNumber2TxCountPool: NewKeyPool("bn2tc", 8),
+		keyBlockHash2NumberPool:           NewKeyPool("bh2bn", 32),
+		keyBlockNumber2BlockPool:          NewKeyPool("bn2b", 8),
+		keyBlockNumber2TxCountPool:        NewKeyPool("bn2tc", 8),
+		keyTxHash2BlockNumberAndIndexPool: NewKeyPool("th2bni", 32),
+		keyBlockNumber2ReceiptsPool:       NewKeyPool("bn2rs", 8),
 	}
 
 	// init next block number to write
@@ -106,9 +110,9 @@ func (store *Store) Write(data types.EthBlockData) error {
 	batch := new(leveldb.Batch)
 
 	store.writeBlock(batch, data.Block)
+	store.writeTransactions(batch, data.Block.Transactions.Transactions())
+	store.writeReceipts(batch, data.Receipts)
 
-	// TODO write txs
-	// TODO write receipts
 	// TODO write traces
 
 	// update next block to write in sequence
