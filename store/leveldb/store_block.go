@@ -17,6 +17,11 @@ func (store *Store) writeBlock(batch *leveldb.Batch, block *types.Block) {
 
 	// block number -> block
 	store.writeJson(batch, store.keyBlockNumber2BlockPool, blockNumberBuf[:], block)
+
+	// block number -> transaction count
+	var txCountBuf [8]byte
+	binary.BigEndian.PutUint64(txCountBuf[:], uint64(len(block.Transactions.Transactions())))
+	store.write(batch, store.keyBlockNumber2TxCountPool, blockNumberBuf[:], txCountBuf[:])
 }
 
 // getBlockNumberByHash returns block number for the given block hash if any.
@@ -63,4 +68,39 @@ func (store *Store) GetBlockByNumber(number uint64) (*types.Block, error) {
 	}
 
 	return &block, nil
+}
+
+// GetBlockTransactionCountByHash returns the transaction count for the given block hash.
+// Returns -1 if the given block hash not found.
+func (store *Store) GetBlockTransactionCountByHash(blockHash common.Hash) (int64, error) {
+	blockNumber, ok, err := store.getBlockNumberByHash(blockHash)
+	if err != nil {
+		return 0, err
+	}
+
+	if !ok {
+		return -1, nil
+	}
+
+	return store.GetBlockTransactionCountByNumber(blockNumber)
+}
+
+// GetBlockTransactionCountByNumber returns the transaction count for the given block number.
+// Returns -1 if the given block number not found.
+func (store *Store) GetBlockTransactionCountByNumber(blockNumber uint64) (int64, error) {
+	var blockNumberBuf [8]byte
+	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
+
+	value, ok, err := store.read(store.keyBlockNumber2TxCountPool, blockNumberBuf[:], 8)
+	if err != nil {
+		return 0, err
+	}
+
+	if !ok {
+		return -1, nil
+	}
+
+	count := binary.BigEndian.Uint64(value)
+
+	return int64(count), nil
 }
