@@ -27,6 +27,8 @@ func createTestStore(t *testing.T) (*Store, func()) {
 func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...common.Hash) types.EthBlockData {
 	var txs []ethTypes.TransactionDetail
 	var receipts []*ethTypes.Receipt
+	var traces []ethTypes.LocalizedTrace
+
 	for i, v := range txHashes {
 		txs = append(txs, ethTypes.TransactionDetail{
 			BlockHash:   &blockHash,
@@ -47,6 +49,15 @@ func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...com
 			TransactionHash:  v,
 			TransactionIndex: uint64(i),
 		})
+
+		traceTxIndex := uint(i)
+		traces = append(traces, ethTypes.LocalizedTrace{
+			Type:                ethTypes.TRACE_CALL,
+			BlockHash:           blockHash,
+			BlockNumber:         uint64(blockNumber),
+			TransactionHash:     &v,
+			TransactionPosition: &traceTxIndex,
+		})
 	}
 
 	return types.EthBlockData{
@@ -57,6 +68,7 @@ func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...com
 			Transactions: *ethTypes.NewTxOrHashListByTxs(txs),
 		},
 		Receipts: receipts,
+		Traces:   traces,
 	}
 }
 
