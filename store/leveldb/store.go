@@ -26,6 +26,7 @@ type Store struct {
 	keyBlockNumber2TxCountPool        *KeyPool
 	keyTxHash2BlockNumberAndIndexPool *KeyPool
 	keyBlockNumber2ReceiptsPool       *KeyPool
+	keyBlockNumber2TracesPool         *KeyPool
 }
 
 // NewStore opens or creates a DB for the given path.
@@ -53,6 +54,7 @@ func NewStore(path string) (*Store, error) {
 		keyBlockNumber2TxCountPool:        NewKeyPool("bn2tc", 8),
 		keyTxHash2BlockNumberAndIndexPool: NewKeyPool("th2bni", 32),
 		keyBlockNumber2ReceiptsPool:       NewKeyPool("bn2rs", 8),
+		keyBlockNumber2TracesPool:         NewKeyPool("bn2ts", 8),
 	}
 
 	// init next block number to write
@@ -112,8 +114,7 @@ func (store *Store) Write(data types.EthBlockData) error {
 	store.writeBlock(batch, data.Block)
 	store.writeTransactions(batch, data.Block.Transactions.Transactions())
 	store.writeReceipts(batch, data.Receipts)
-
-	// TODO write traces
+	store.writeTraces(batch, data.Traces)
 
 	// update next block to write in sequence
 	var nextBlockNumberBuf [8]byte
