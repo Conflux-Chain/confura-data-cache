@@ -37,7 +37,7 @@ func (c *EthCache) Put(data *cdcTypes.EthBlockData) error {
 	// check block number in sequence
 	bn := data.Block.Number.Uint64()
 	if c.blockNumbers.Front() != nil {
-		next := c.blockNumbers.Back().Value.(uint64) + 1
+		next := c.blockNumbers.Front().Value.(uint64) + 1
 		if next != bn {
 			return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", next, bn)
 		}
