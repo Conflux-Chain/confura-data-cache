@@ -21,8 +21,9 @@ type Store struct {
 	nextBlockNumber atomic.Uint64
 
 	// use object pool for memory saving
-	keyBlockHash2NumberPool  *KeyPool
-	keyBlockNumber2BlockPool *KeyPool
+	keyBlockHash2NumberPool    *KeyPool
+	keyBlockNumber2BlockPool   *KeyPool
+	keyBlockNumber2TxCountPool *KeyPool
 }
 
 // NewStore opens or creates a DB for the given path.
@@ -45,8 +46,9 @@ func NewStore(path string) (*Store, error) {
 	store := Store{
 		db: db,
 
-		keyBlockHash2NumberPool:  NewKeyPool("bh2bn", 32),
-		keyBlockNumber2BlockPool: NewKeyPool("bn2b", 8),
+		keyBlockHash2NumberPool:    NewKeyPool("bh2bn", 32),
+		keyBlockNumber2BlockPool:   NewKeyPool("bn2b", 8),
+		keyBlockNumber2TxCountPool: NewKeyPool("bn2tc", 8),
 	}
 
 	// init next block number to write

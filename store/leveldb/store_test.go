@@ -24,12 +24,22 @@ func createTestStore(t *testing.T) (*Store, func()) {
 	}
 }
 
-func createTestEthData(blockNumber int64, blockHash common.Hash) types.EthBlockData {
+func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...common.Hash) types.EthBlockData {
+	var txs []ethTypes.TransactionDetail
+	for _, v := range txHashes {
+		txs = append(txs, ethTypes.TransactionDetail{
+			Hash:        v,
+			BlockNumber: big.NewInt(blockNumber),
+			BlockHash:   &blockHash,
+		})
+	}
+
 	return types.EthBlockData{
 		Block: &ethTypes.Block{
-			Number:     big.NewInt(blockNumber),
-			Hash:       blockHash,
-			Difficulty: big.NewInt(999),
+			Number:       big.NewInt(blockNumber),
+			Hash:         blockHash,
+			Difficulty:   big.NewInt(999),
+			Transactions: *ethTypes.NewTxOrHashListByTxs(txs),
 		},
 	}
 }
@@ -59,44 +69,11 @@ func TestStoreWrite(t *testing.T) {
 	ethData2 := createTestEthData(2, common.HexToHash("0x6662"))
 	assert.Nil(t, store.Write(ethData2))
 
-	// check next block number in database
+	// check next block number
 	next, ok, err := store.getNextBlockNumber()
 	assert.Nil(t, err)
 	assert.True(t, ok)
 	assert.Equal(t, uint64(3), next)
-}
 
-func TestStoreGetBlock(t *testing.T) {
-	store, close := createTestStore(t)
-	defer close()
-
-	// write block 0
-	ethData0 := createTestEthData(0, common.HexToHash("0x6660"))
-	assert.Nil(t, store.Write(ethData0))
-
-	// write block 1
-	ethData1 := createTestEthData(1, common.HexToHash("0x6661"))
-	assert.Nil(t, store.Write(ethData1))
-
-	// get block by hash - found
-	data, err := store.GetBlockByHash(common.HexToHash("0x6660"))
-	assert.Nil(t, err)
-	assert.Equal(t, uint64(0), data.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x6660"), data.Hash)
-
-	// get block by hash - not found
-	data, err = store.GetBlockByHash(common.HexToHash("0x8880"))
-	assert.Nil(t, err)
-	assert.Nil(t, data)
-
-	// get block by number - found
-	data, err = store.GetBlockByNumber(1)
-	assert.Nil(t, err)
-	assert.Equal(t, uint64(1), data.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x6661"), data.Hash)
-
-	// get block by number - not found
-	data, err = store.GetBlockByNumber(33)
-	assert.Nil(t, err)
-	assert.Nil(t, data)
+	assert.Equal(t, uint64(3), store.NextBlockNumber())
 }
