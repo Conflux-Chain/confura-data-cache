@@ -26,11 +26,26 @@ func createTestStore(t *testing.T) (*Store, func()) {
 
 func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...common.Hash) types.EthBlockData {
 	var txs []ethTypes.TransactionDetail
-	for _, v := range txHashes {
+	var receipts []*ethTypes.Receipt
+	for i, v := range txHashes {
 		txs = append(txs, ethTypes.TransactionDetail{
-			Hash:        v,
-			BlockNumber: big.NewInt(blockNumber),
 			BlockHash:   &blockHash,
+			BlockNumber: big.NewInt(blockNumber),
+			Hash:        v,
+			Gas:         21000,
+			Input:       []byte{},
+			Nonce:       666,
+			R:           big.NewInt(1),
+			S:           big.NewInt(2),
+			V:           big.NewInt(3),
+			Value:       big.NewInt(4),
+		})
+
+		receipts = append(receipts, &ethTypes.Receipt{
+			BlockHash:        blockHash,
+			BlockNumber:      uint64(blockNumber),
+			TransactionHash:  v,
+			TransactionIndex: uint64(i),
 		})
 	}
 
@@ -41,6 +56,7 @@ func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...com
 			Difficulty:   big.NewInt(999),
 			Transactions: *ethTypes.NewTxOrHashListByTxs(txs),
 		},
+		Receipts: receipts,
 	}
 }
 
