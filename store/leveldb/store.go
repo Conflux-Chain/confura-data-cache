@@ -2,12 +2,9 @@ package leveldb
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"sync/atomic"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
-	"github.com/ethereum/go-ethereum/common"
-	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -48,8 +45,8 @@ func NewStore(path string) (*Store, error) {
 	store := Store{
 		db: db,
 
-		keyBlockHash2NumberPool:  NewKeyPool("bh", 32),
-		keyBlockNumber2BlockPool: NewKeyPool("bn", 8),
+		keyBlockHash2NumberPool:  NewKeyPool("bh2bn", 32),
+		keyBlockNumber2BlockPool: NewKeyPool("bn2b", 8),
 	}
 
 	// init next block number to write
@@ -69,15 +66,19 @@ func NewStore(path string) (*Store, error) {
 // getNextBlockNumber returns the next block number in database.
 func (store *Store) getNextBlockNumber() (uint64, bool, error) {
 	value, err := store.db.Get(keyNextBlockNumber, nil)
-	if err == nil {
-		return binary.BigEndian.Uint64(value), true, nil
-	}
-
 	if err == dberrors.ErrNotFound {
 		return 0, false, nil
 	}
 
-	return 0, false, err
+	if err != nil {
+		return 0, false, err
+	}
+
+	if len(value) != 8 {
+		return 0, false, errors.Errorf("Invalid value size, expected = 8, actual = %v", len(value))
+	}
+
+	return binary.BigEndian.Uint64(value), true, nil
 }
 
 // Close closes the underlying LevelDB database.
@@ -102,20 +103,7 @@ func (store *Store) Write(data types.EthBlockData) error {
 
 	batch := new(leveldb.Batch)
 
-	// block number
-	var blockNumberBuf [8]byte
-	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
-
-	// block hash -> block number
-	keyBlockHash2Number := store.keyBlockHash2NumberPool.Get(data.Block.Hash.Bytes())
-	defer store.keyBlockHash2NumberPool.Put(keyBlockHash2Number)
-	batch.Put(*keyBlockHash2Number, blockNumberBuf[:])
-
-	// block number -> block
-	keyBlockNumber2Block := store.keyBlockNumber2BlockPool.Get(blockNumberBuf[:])
-	defer store.keyBlockNumber2BlockPool.Put(keyBlockNumber2Block)
-	blockJson, _ := json.Marshal(data.Block)
-	batch.Put(*keyBlockNumber2Block, blockJson)
+	store.writeBlock(batch, data.Block)
 
 	// TODO write txs
 	// TODO write receipts
@@ -133,48 +121,4 @@ func (store *Store) Write(data types.EthBlockData) error {
 	store.nextBlockNumber.Add(1)
 
 	return nil
-}
-
-// GetBlockByHash returns block for the given block hash. If not found, returns nil.
-func (store *Store) GetBlockByHash(hash common.Hash) (*ethTypes.Block, error) {
-	keyBlockHash2Number := store.keyBlockHash2NumberPool.Get(hash.Bytes())
-	defer store.keyBlockHash2NumberPool.Put(keyBlockHash2Number)
-
-	value, err := store.db.Get(*keyBlockHash2Number, nil)
-	if err == dberrors.ErrNotFound {
-		return nil, nil
-	}
-
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to get block number by hash")
-	}
-
-	number := binary.BigEndian.Uint64(value)
-
-	return store.GetBlockByNumber(number)
-}
-
-// GetBlockByNumber returns block for the given block number. If not found, returns nil.
-func (store *Store) GetBlockByNumber(number uint64) (*ethTypes.Block, error) {
-	var blockNumberBuf [8]byte
-	binary.BigEndian.PutUint64(blockNumberBuf[:], number)
-
-	keyBlockNumber2Block := store.keyBlockNumber2BlockPool.Get(blockNumberBuf[:])
-	defer store.keyBlockNumber2BlockPool.Put(keyBlockNumber2Block)
-
-	value, err := store.db.Get(*keyBlockNumber2Block, nil)
-	if err == dberrors.ErrNotFound {
-		return nil, nil
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	var block ethTypes.Block
-	if err = json.Unmarshal(value, &block); err != nil {
-		return nil, errors.WithMessage(err, "Failed to unmarshal block")
-	}
-
-	return &block, nil
 }
