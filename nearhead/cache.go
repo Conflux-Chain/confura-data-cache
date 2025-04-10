@@ -12,46 +12,44 @@ import (
 
 // EthCache is used to cache near head data
 type EthCache struct {
-	blockNumber2Blocks map[uint64]*cdcTypes.EthBlockData
+	blockNumber2BlockDatas map[uint64]*cdcTypes.EthBlockData
+	blockNumbers           list.List
+	blockHash2BlockNumbers map[common.Hash]uint64
+	txHash2TxIndexes       map[common.Hash]TransactionIndex
 
-	blockNumbers list.List
-	blockHashes  map[common.Hash]uint64
-	transactions map[common.Hash]Transaction
-
-	mutex sync.Mutex
+	rwMutex sync.RWMutex
 }
 
 func MustNewEthCache() *EthCache {
 	return &EthCache{
-		blockNumber2Blocks: make(map[uint64]*cdcTypes.EthBlockData),
-		blockNumbers:       *list.New(),                       // for evict from list front
-		blockHashes:        make(map[common.Hash]uint64),      // mapping from block hash to number, for query by block hash
-		transactions:       make(map[common.Hash]Transaction), // mapping from tx hash to block number and tx index, for query by tx hash
+		blockNumber2BlockDatas: make(map[uint64]*cdcTypes.EthBlockData),
+		blockNumbers:           *list.New(),                            // for evict from list front
+		blockHash2BlockNumbers: make(map[common.Hash]uint64),           // mapping from block hash to number, for query by block hash
+		txHash2TxIndexes:       make(map[common.Hash]TransactionIndex), // mapping from tx hash to block number and tx index, for query by tx hash
 	}
 }
 
 // Put is used to add near head data to memory cache
 func (c *EthCache) Put(data *cdcTypes.EthBlockData) error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.rwMutex.Lock()
+	defer c.rwMutex.Unlock()
 
-	nextBlockNumber := uint64(0)
-	lastBlockNumber := c.blockNumbers.Front()
-	if lastBlockNumber != nil {
-		nextBlockNumber = lastBlockNumber.Value.(uint64) + 1
-	}
-	if nextBlockNumber != data.Block.Number.Uint64() {
-		return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", nextBlockNumber, data.Block.Number.Uint64())
+	// check block number in sequence
+	bn := data.Block.Number.Uint64()
+	if c.blockNumbers.Back() != nil {
+		next := c.blockNumbers.Back().Value.(uint64) + 1
+		if next != bn {
+			return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", next, bn)
+		}
 	}
 
 	// TODO evict if exceeds maxsize
 
-	bn := data.Block.Number.Uint64()
-	c.blockNumber2Blocks[bn] = data
+	c.blockNumber2BlockDatas[bn] = data
 	c.blockNumbers.PushFront(bn)
-	c.blockHashes[data.Block.Hash] = bn
+	c.blockHash2BlockNumbers[data.Block.Hash] = bn
 	for _, tx := range data.Block.Transactions.Transactions() {
-		c.transactions[tx.Hash] = Transaction{
+		c.txHash2TxIndexes[tx.Hash] = TransactionIndex{
 			blockNumber:      bn,
 			transactionIndex: *tx.TransactionIndex,
 		}
@@ -61,129 +59,164 @@ func (c *EthCache) Put(data *cdcTypes.EthBlockData) error {
 }
 
 // GetBlockByNumber returns block with given number.
-func (c *EthCache) GetBlockByNumber(blockNumber uint64, isFull bool) (*types.Block, bool) {
-	data, exists := c.blockNumber2Blocks[blockNumber]
+func (c *EthCache) GetBlockByNumber(blockNumber uint64, isFull bool) *types.Block {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+
+	data, exists := c.blockNumber2BlockDatas[blockNumber]
 	if !exists {
-		return nil, false
+		return nil
 	}
 
-	if !isFull {
-		hashes := make([]common.Hash, 0)
-		for _, tx := range data.Block.Transactions.Transactions() {
-			hashes = append(hashes, tx.Hash)
-		}
-		txOrHashList := types.NewTxOrHashListByHashes(hashes)
-
-		blockClone := *data.Block
-		blockClone.Transactions = *txOrHashList
-		return &blockClone, exists
+	if isFull {
+		return data.Block
 	}
 
-	return data.Block, exists
+	txs := data.Block.Transactions.Transactions()
+	hashes := make([]common.Hash, len(txs))
+	for i, tx := range txs {
+		hashes[i] = tx.Hash
+	}
+	txOrHashList := types.NewTxOrHashListByHashes(hashes)
+
+	block := *data.Block
+	block.Transactions = *txOrHashList
+	return &block
 }
 
 // GetBlockByHash returns block with given block hash.
-func (c *EthCache) GetBlockByHash(blockHash common.Hash, isFull bool) (*types.Block, bool) {
-	blockNumber, exists := c.blockHashes[blockHash]
+func (c *EthCache) GetBlockByHash(blockHash common.Hash, isFull bool) *types.Block {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+
+	blockNumber, exists := c.blockHash2BlockNumbers[blockHash]
 	if !exists {
-		return nil, false
+		return nil
 	}
 
 	return c.GetBlockByNumber(blockNumber, isFull)
 }
 
 // GetTransactionByHash returns transaction with given transaction hash.
-func (c *EthCache) GetTransactionByHash(txHash common.Hash) (*types.TransactionDetail, bool) {
-	txCache, exists := c.transactions[txHash]
+func (c *EthCache) GetTransactionByHash(txHash common.Hash) *types.TransactionDetail {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+
+	txIndex, exists := c.txHash2TxIndexes[txHash]
 	if !exists {
-		return nil, false
+		return nil
 	}
 
-	data, exists := c.blockNumber2Blocks[txCache.blockNumber]
+	data, exists := c.blockNumber2BlockDatas[txIndex.blockNumber]
 	if !exists {
-		return nil, false
+		return nil
 	}
 
-	tx := data.Block.Transactions.Transactions()[txCache.transactionIndex]
-	return &tx, true
+	tx := data.Block.Transactions.Transactions()[txIndex.transactionIndex]
+	return &tx
 }
 
 // GetBlockReceipts returns the receipts of a given block number or hash.
-func (c *EthCache) GetBlockReceipts(blockNumOrHash types.BlockNumberOrHash) ([]*types.Receipt, bool, error) {
+func (c *EthCache) GetBlockReceipts(blockNumOrHash types.BlockNumberOrHash) ([]*types.Receipt, error) {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+
 	if blockNumOrHash.BlockNumber == nil && blockNumOrHash.BlockHash == nil {
-		return nil, false, errors.New("No block number or block hash provided")
+		return nil, errors.New("No block number or block hash provided")
 	}
 
 	if blockNumOrHash.BlockNumber != nil {
-		data, exists := c.blockNumber2Blocks[uint64(blockNumOrHash.BlockNumber.Int64())]
-		return data.Receipts, exists, nil
+		data, exists := c.blockNumber2BlockDatas[uint64(blockNumOrHash.BlockNumber.Int64())]
+		if !exists {
+			return nil, nil
+		}
+		return data.Receipts, nil
 	}
 
-	blockNumber, exists := c.blockHashes[*blockNumOrHash.BlockHash]
+	blockNumber, exists := c.blockHash2BlockNumbers[*blockNumOrHash.BlockHash]
 	if !exists {
-		return nil, false, nil
+		return nil, nil
 	}
-
-	data, exists := c.blockNumber2Blocks[blockNumber]
-	return data.Receipts, exists, nil
+	data, exists := c.blockNumber2BlockDatas[blockNumber]
+	if !exists {
+		return nil, nil
+	}
+	return data.Receipts, nil
 }
 
 // GetTransactionReceipt returns transaction receipt by transaction hash.
-func (c *EthCache) GetTransactionReceipt(txHash common.Hash) (*types.Receipt, bool) {
-	txCache, exists := c.transactions[txHash]
+func (c *EthCache) GetTransactionReceipt(txHash common.Hash) *types.Receipt {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+
+	txIndex, exists := c.txHash2TxIndexes[txHash]
 	if !exists {
-		return nil, false
+		return nil
 	}
 
-	data, exists := c.blockNumber2Blocks[txCache.blockNumber]
+	data, exists := c.blockNumber2BlockDatas[txIndex.blockNumber]
 	if !exists {
-		return nil, false
+		return nil
 	}
 
-	receipt := data.Receipts[txCache.transactionIndex]
-	return receipt, true
+	receipt := data.Receipts[txIndex.transactionIndex]
+	return receipt
 }
 
 // GetBlockTraces returns all traces produced at given block.
-func (c *EthCache) GetBlockTraces(blockNumOrHash types.BlockNumberOrHash) ([]types.LocalizedTrace, bool, error) {
+func (c *EthCache) GetBlockTraces(blockNumOrHash types.BlockNumberOrHash) ([]types.LocalizedTrace, error) {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+
 	if blockNumOrHash.BlockNumber == nil && blockNumOrHash.BlockHash == nil {
-		return nil, false, errors.New("No block number or block hash provided")
+		return nil, errors.New("No block number or block hash provided")
 	}
 
 	if blockNumOrHash.BlockNumber != nil {
-		data, exists := c.blockNumber2Blocks[uint64(blockNumOrHash.BlockNumber.Int64())]
-		return data.Traces, exists, nil
+		data, exists := c.blockNumber2BlockDatas[uint64(blockNumOrHash.BlockNumber.Int64())]
+		if !exists {
+			return nil, nil
+		}
+		return data.Traces, nil
 	}
 
-	blockNumber, exists := c.blockHashes[*blockNumOrHash.BlockHash]
+	blockNumber, exists := c.blockHash2BlockNumbers[*blockNumOrHash.BlockHash]
 	if !exists {
-		return nil, false, nil
+		return nil, nil
 	}
-
-	data, exists := c.blockNumber2Blocks[blockNumber]
-	return data.Traces, exists, nil
+	data, exists := c.blockNumber2BlockDatas[blockNumber]
+	if !exists {
+		return nil, nil
+	}
+	return data.Traces, nil
 }
 
 // GetTransactionTraces returns all traces of given transaction.
-func (c *EthCache) GetTransactionTraces(txHash common.Hash) ([]types.LocalizedTrace, bool) {
-	txCache, exists := c.transactions[txHash]
+func (c *EthCache) GetTransactionTraces(txHash common.Hash) []types.LocalizedTrace {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+
+	txIndex, exists := c.txHash2TxIndexes[txHash]
 	if !exists {
-		return nil, false
+		return nil
 	}
 
-	data, exists := c.blockNumber2Blocks[txCache.blockNumber]
+	data, exists := c.blockNumber2BlockDatas[txIndex.blockNumber]
+	if !exists {
+		return nil
+	}
 
-	txTraces := make([]types.LocalizedTrace, 0)
+	traces := make([]types.LocalizedTrace, 0)
 	for _, trace := range data.Traces {
 		if txHash == *trace.TransactionHash {
-			txTraces = append(txTraces, trace)
+			traces = append(traces, trace)
 		}
 	}
 
-	return txTraces, exists
+	return traces
 }
 
-type Transaction struct {
+type TransactionIndex struct {
 	blockNumber      uint64
 	transactionIndex uint64
 }
