@@ -9,13 +9,13 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func (store *Store) writeReceipts(batch *leveldb.Batch, receipts []*types.Receipt) {
-	if len(receipts) == 0 {
+func (store *Store) writeReceipts(batch *leveldb.Batch, blockNumber uint64, receipts []types.Receipt) {
+	if receipts == nil {
 		return
 	}
 
 	var blockNumberBuf [8]byte
-	binary.BigEndian.PutUint64(blockNumberBuf[:], receipts[0].BlockNumber)
+	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
 
 	store.writeJson(batch, store.keyBlockNumber2ReceiptsPool, blockNumberBuf[:], receipts)
 }

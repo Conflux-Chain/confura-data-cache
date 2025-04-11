@@ -32,7 +32,10 @@ type Store struct {
 // NewStore opens or creates a DB for the given path.
 //
 // If corruption detected for an existing DB, it will try to recover the DB.
-func NewStore(path string) (*Store, error) {
+//
+// If the DB of specified path is empty and defaultNextBlockNumber specified,
+// store will write data from defaultNextBlockNumber.
+func NewStore(path string, defaultNextBlockNumber ...uint64) (*Store, error) {
 	// open or create database
 	db, err := leveldb.OpenFile(path, nil)
 	if dberrors.IsCorrupted(err) {
@@ -66,6 +69,8 @@ func NewStore(path string) (*Store, error) {
 
 	if ok {
 		store.nextBlockNumber.Store(nextBlockNumber)
+	} else if len(defaultNextBlockNumber) > 0 {
+		store.nextBlockNumber.Store(defaultNextBlockNumber[0])
 	}
 
 	return &store, nil
@@ -113,8 +118,8 @@ func (store *Store) Write(data types.EthBlockData) error {
 
 	store.writeBlock(batch, data.Block)
 	store.writeTransactions(batch, data.Block.Transactions.Transactions())
-	store.writeReceipts(batch, data.Receipts)
-	store.writeTraces(batch, data.Traces)
+	store.writeReceipts(batch, blockNumber, data.Receipts)
+	store.writeTraces(batch, blockNumber, data.Traces)
 
 	// update next block to write in sequence
 	var nextBlockNumberBuf [8]byte
