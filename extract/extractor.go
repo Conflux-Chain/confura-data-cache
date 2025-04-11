@@ -73,4 +73,7 @@ type Extractor[T any] interface {
 
 	// Unsubscribe unsubscribes from the data source.
 	Unsubscribe() error
+
+	// Close closes the extractor and releases any associated resources.
+	Close()
 }

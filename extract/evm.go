@@ -284,3 +284,10 @@ func (e *EvmExtractor) Unsubscribe() error {
 	e.running.Store(false)
 	return nil
 }
+
+func (e *EvmExtractor) Close() {
+	e.Unsubscribe()
+	for _, c := range e.rpcClients {
+		c.Close()
+	}
+}
