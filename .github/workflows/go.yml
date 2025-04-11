@@ -27,8 +27,7 @@ jobs:
     - name: Test
       run: go test -coverprofile=coverage.out -v ./...
 
-    - name: Generate HTML Report
-      run : go tool cover -html=coverage.out -o coverage.html
-
     - name: Upload to Codecov
       uses: codecov/codecov-action@v5
+      with:
+        file: coverage.out
