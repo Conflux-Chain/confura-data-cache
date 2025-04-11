@@ -25,4 +25,13 @@ jobs:
       run: go build -v ./...
 
     - name: Test
-      run: go test -v ./...
+      run: go test -coverprofile=coverage.out -v ./...
+
+    - name: Generate HTML Report
+      run : go tool cover -html=coverage.out -o coverage.html
+
+    - name: Upload Coverage
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: coverage.html
