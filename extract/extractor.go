@@ -9,7 +9,6 @@ import (
 )
 
 var (
-	//
 	// Ensure EvmExtractor implements the Extractor interface
 	_ Extractor[types.EthBlockData] = (*EvmExtractor)(nil)
 
