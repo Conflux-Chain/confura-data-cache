@@ -33,6 +33,7 @@ type EvmExtractor struct {
 	Config
 
 	running    atomic.Bool      // Indicates if the extractor is actively syncing
+	cancel     atomic.Value     // Context cancellation function to stop syncing
 	clientIdx  atomic.Uint32    // Index of the selected RPC client
 	rpcClients []*web3go.Client // Connected RPC clients for fetching blockchain data
 }
@@ -61,7 +62,6 @@ func (e *EvmExtractor) Subscribe(ctx context.Context, opts ...ExtractOptions) (<
 	if !e.running.CompareAndSwap(false, true) {
 		return nil, errors.New("extractor is already running")
 	}
-	defer e.running.Store(false)
 
 	var opt ExtractOptions
 	defaults.SetDefaults(&opt)
@@ -73,20 +73,24 @@ func (e *EvmExtractor) Subscribe(ctx context.Context, opts ...ExtractOptions) (<
 	if len(opt.AlignBlockTag) > 0 {
 		opt.AlignBlockTag = fmt.Sprintf(`"%v"`, opt.AlignBlockTag)
 		if err := json.Unmarshal([]byte(opt.AlignBlockTag), &alignBlockNumber); err != nil {
+			e.running.Store(false)
 			return nil, errors.WithMessagef(err, "failed to parse align block tag %v", opt.AlignBlockTag)
 		}
 	}
 
+	ctx, cancel := context.WithCancel(ctx)
+	e.cancel.Store(cancel)
+
 	resultChan := make(chan types.EthBlockData, e.ResultBufferSize)
-	go func() {
-		defer close(resultChan)
-		e.run(ctx, resultChan, EvmExtractOptions{opt, alignBlockNumber})
-	}()
+	go e.run(ctx, resultChan, EvmExtractOptions{opt, alignBlockNumber})
 
 	return resultChan, nil
 }
 
 func (e *EvmExtractor) run(ctx context.Context, resultChan chan<- types.EthBlockData, opt EvmExtractOptions) {
+	defer close(resultChan)
+	defer e.running.Store(false)
+
 	ticker := time.NewTimer(opt.CatchupPollInterval)
 	defer ticker.Stop()
 
@@ -99,8 +103,8 @@ func (e *EvmExtractor) run(ctx context.Context, resultChan chan<- types.EthBlock
 			if err == nil {
 				// If the extraction was successful, collect the results to the result channel
 				// TODO: limit the memory usage of the result slice
-				for _, result := range result {
-					resultChan <- result
+				for _, data := range result {
+					resultChan <- data
 				}
 			}
 
@@ -147,7 +151,7 @@ func (e *EvmExtractor) extractOnce(ctx context.Context, opt EvmExtractOptions) (
 
 	// Fetch block data for the calculated range.
 	numBlocksToFetch := int(toBlockNumber - e.StartBlockNumber + 1)
-	blockDataBatch := make([]types.EthBlockData, 0, numBlocksToFetch) // Pre-allocate slice capacity
+	batchBlockData := make([]types.EthBlockData, 0, numBlocksToFetch)
 	for blockNum := e.StartBlockNumber; blockNum <= toBlockNumber; blockNum++ {
 		blockData, err := e.fetchOneBlock(ctx, client, blockNum)
 		if err != nil {
@@ -158,12 +162,12 @@ func (e *EvmExtractor) extractOnce(ctx context.Context, opt EvmExtractOptions) (
 			// It should ideally return an error if data is nil, but handle defensively.
 			return nil, false, errors.Errorf("received nil block data for block number %d", blockNum)
 		}
-		blockDataBatch = append(blockDataBatch, *blockData)
+		batchBlockData = append(batchBlockData, *blockData)
 	}
 
 	// Update the start block number for the next batch
 	e.StartBlockNumber = toBlockNumber + 1
-	return blockDataBatch, false, nil
+	return batchBlockData, false, nil
 }
 
 func (e *EvmExtractor) fetchOneBlock(
@@ -268,9 +272,15 @@ func (e *EvmExtractor) verifyBlockData(data *types.EthBlockData) error {
 	return nil
 }
 
-func (e *EvmExtractor) Unsubscribe(ctx context.Context) error {
-	if !e.running.CompareAndSwap(true, false) {
+func (e *EvmExtractor) Unsubscribe() error {
+	if !e.running.Load() {
 		return errors.New("extractor is not running")
 	}
+
+	if cancel, ok := e.cancel.Load().(context.CancelFunc); ok {
+		cancel()
+	}
+
+	e.running.Store(false)
 	return nil
 }

@@ -51,4 +51,6 @@ func TestEvmExtract(t *testing.T) {
 	assert.NoError(t, err)
 
 	<-resChan
+
+	assert.NoError(t, extractor.Unsubscribe())
 }
