@@ -4,12 +4,19 @@ import (
 	"context"
 	"time"
 
+	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/pkg/errors"
 )
 
-// ErrInconsistentChainData indicates that the blockchain data fetched is inconsistent.
-// Consumers of this extractor should treat this as a fatal or blocking error for the current data set.
-var ErrInconsistentChainData = errors.New("inconsistent chain data")
+var (
+	//
+	// Ensure EvmExtractor implements the Extractor interface
+	_ Extractor[types.EthBlockData] = (*EvmExtractor)(nil)
+
+	// ErrInconsistentChainData indicates that the blockchain data fetched is inconsistent.
+	// Consumers of this extractor should treat this as a fatal or blocking error for the current data set.
+	ErrInconsistentChainData = errors.New("inconsistent chain data")
+)
 
 // NewInconsistentChainDataError wraps ErrInconsistentChainData with a specific reason.
 // This allows detailed error reporting while preserving the ability to match with errors.Is().

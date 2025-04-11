@@ -3,6 +3,7 @@ package extract_test
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/Conflux-Chain/confura-data-cache/extract"
@@ -24,13 +25,19 @@ func createTestStore(t *testing.T) (*leveldb.Store, func()) {
 	}
 }
 
-func TestEvmSync(t *testing.T) {
+func TestEvmExtract(t *testing.T) {
+	endpoints := os.Getenv("TEST_EVM_RPC_ENDPOINTS")
+	if len(endpoints) == 0 {
+		t.Skip("no rpc endpoints provided, skip test")
+		return
+	}
+
 	store, close := createTestStore(t)
 	defer close()
 
 	conf := extract.Config{
 		StartBlockNumber: store.NextBlockNumber(),
-		RpcEndpoints:     []string{"http://evmtestnet-internal.confluxrpc.com"},
+		RpcEndpoints:     strings.Split(endpoints, ","),
 	}
 	defaults.SetDefaults(&conf)
 
@@ -43,9 +50,5 @@ func TestEvmSync(t *testing.T) {
 	resChan, err := extractor.Subscribe(ctx)
 	assert.NoError(t, err)
 
-	// Here we only test one fetch and then exit
-	for res := range resChan {
-		assert.NotNil(t, res)
-		return
-	}
+	<-resChan
 }

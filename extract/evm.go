@@ -78,10 +78,11 @@ func (e *EvmExtractor) Subscribe(ctx context.Context, opts ...ExtractOptions) (<
 	}
 
 	resultChan := make(chan types.EthBlockData, e.ResultBufferSize)
-	defer close(resultChan)
+	go func() {
+		defer close(resultChan)
+		e.run(ctx, resultChan, EvmExtractOptions{opt, alignBlockNumber})
+	}()
 
-	evmOpt := EvmExtractOptions{opt, alignBlockNumber}
-	go e.run(ctx, resultChan, evmOpt)
 	return resultChan, nil
 }
 
