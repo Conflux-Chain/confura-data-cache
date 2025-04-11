@@ -72,5 +72,5 @@ type Extractor[T any] interface {
 	Subscribe(context.Context, ...ExtractOptions) (<-chan T, error)
 
 	// Unsubscribe unsubscribes from the data source.
-	Unsubscribe(ctx context.Context) error
+	Unsubscribe() error
 }
