@@ -43,6 +43,7 @@ func TestEvmExtract(t *testing.T) {
 
 	extractor, err := extract.NewEvmExtractor(conf)
 	assert.NoError(t, err)
+	defer extractor.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
