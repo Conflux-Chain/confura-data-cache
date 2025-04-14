@@ -1,6 +1,8 @@
 package extract
 
 import (
+	"time"
+
 	"github.com/openweb3/go-rpc-provider"
 	"github.com/pkg/errors"
 )
@@ -36,6 +38,9 @@ type Config[T any] struct {
 	// If memory usage exceeds this limit, syncing will be paused.
 	// Default is 256MB (268,435,456 bytes).
 	MaxMemoryUsageBytes uint64 `default:"268435456"`
+
+	// PollInterval specifies how often to poll for new blocks during normal, steady-state operation.
+	PollInterval time.Duration `default:"1s"`
 }
 
 // EthConfig is a Config specialization for Ethereum-compatible blockchains.
