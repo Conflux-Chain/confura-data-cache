@@ -7,33 +7,34 @@ import (
 	"testing"
 
 	"github.com/Conflux-Chain/confura-data-cache/extract"
+	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/mcuadros/go-defaults"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestEvmExtract(t *testing.T) {
-	endpoints := os.Getenv("TEST_EVM_RPC_ENDPOINTS")
-	if len(endpoints) == 0 {
-		t.Skip("no rpc endpoints provided, skip test")
+	endpoint := strings.TrimSpace(os.Getenv("TEST_EVM_RPC_ENDPOINT"))
+	if len(endpoint) == 0 {
+		t.Skip("no rpc endpoint provided, skip test")
 		return
 	}
 
-	conf := extract.Config{
-		RpcEndpoints: strings.Split(endpoints, ","),
-	}
+	conf := extract.EthConfig{RpcEndpoint: endpoint}
 	defaults.SetDefaults(&conf)
 
 	extractor, err := extract.NewEvmExtractor(conf)
 	assert.NoError(t, err)
-	defer extractor.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	resChan, err := extractor.Subscribe(ctx)
-	assert.NoError(t, err)
+	dataChan := make(chan types.EthBlockData, 1)
+	go extractor.Start(ctx, dataChan)
 
-	<-resChan
+	data := <-dataChan
 
-	assert.NoError(t, extractor.Unsubscribe())
+	assert.NotNil(t, data)
+	assert.NotNil(t, data.Block)
+	assert.NotNil(t, data.Receipts)
+	assert.NotNil(t, data.Traces)
 }
