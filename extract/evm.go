@@ -2,6 +2,7 @@ package extract
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
@@ -18,7 +19,9 @@ import (
 // 5. add memory threshold limit to avoid OOM
 type EthExtractor struct {
 	EthConfig
-	rpcClient *web3go.Client // Connected RPC clients for fetching blockchain data
+
+	hashWindow *EthBlockHashWindow // Window of recent block hashes for detecting reorgs
+	rpcClient  *web3go.Client      // Connected RPC clients for fetching blockchain data
 }
 
 func NewEvmExtractor(conf EthConfig) (*EthExtractor, error) {
@@ -32,8 +35,9 @@ func NewEvmExtractor(conf EthConfig) (*EthExtractor, error) {
 	}
 
 	return &EthExtractor{
-		EthConfig: conf,
-		rpcClient: client,
+		EthConfig:  conf,
+		rpcClient:  client,
+		hashWindow: NewEthBlockHashWindow(conf.BufferSize),
 	}, nil
 }
 
@@ -86,7 +90,23 @@ func (e *EthExtractor) extractOnce() (*types.EthBlockData, bool, error) {
 
 	// Verify the block data
 	if err := blockData.Verify(); err != nil {
-		return nil, false, errors.WithMessage(err, "failed to validate block data")
+		return nil, false, NewInconsistentChainDataError(err.Error())
+	}
+
+	// Check for reorgs by comparing the block parent hash with the hashes in the hash window.
+	if _, bh, ok := e.hashWindow.Peek(); ok && bh != blockData.Block.ParentHash {
+		e.StartBlockNumber--
+		e.hashWindow.Pop()
+
+		detail := fmt.Sprintf(
+			"reorg detected: expected parent hash %s, got %s", bh, blockData.Block.ParentHash,
+		)
+		return nil, false, NewInconsistentChainDataError(detail)
+	}
+
+	// Push the block hash into the hash window for future reorg checks.
+	if err := e.hashWindow.Push(blockData.Block.Number.Uint64(), blockData.Block.Hash); err != nil {
+		return nil, false, errors.WithMessage(err, "failed to push block hash into window")
 	}
 
 	e.StartBlockNumber++
