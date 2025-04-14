@@ -3,6 +3,7 @@ package leveldb
 import (
 	"encoding/binary"
 	"sync/atomic"
+	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/pkg/errors"
@@ -27,6 +28,8 @@ type Store struct {
 	keyTxHash2BlockNumberAndIndexPool *KeyPool
 	keyBlockNumber2ReceiptsPool       *KeyPool
 	keyBlockNumber2TracesPool         *KeyPool
+
+	metrics Metrics
 }
 
 // NewStore opens or creates a DB for the given path.
@@ -114,6 +117,7 @@ func (store *Store) Write(data types.EthBlockData) error {
 		return errors.Errorf("Block data not written in sequence, expected = %v, actual = %v", next, blockNumber)
 	}
 
+	start := time.Now()
 	batch := new(leveldb.Batch)
 
 	store.writeBlock(batch, data.Block)
@@ -131,6 +135,13 @@ func (store *Store) Write(data types.EthBlockData) error {
 	}
 
 	store.nextBlockNumber.Add(1)
+
+	// add metrics
+	store.metrics.Latest().Update(int64(blockNumber))
+	store.metrics.Write().UpdateSince(start)
+	store.metrics.NumTxs().Update(int64(len(data.Receipts)))
+	store.metrics.NumTraces().Update(int64(len(data.Traces)))
+	// TODO data size
 
 	return nil
 }
