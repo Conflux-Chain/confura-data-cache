@@ -37,6 +37,10 @@ func TestBlockHashWindow(t *testing.T) {
 	blockNum, hash := w.Pop()
 	assert.True(t, blockNum == 3 && hash == "hash3")
 
+	// Test push after pop
+	err = w.Push(4, "hash4")
+	assert.Contains(t, err.Error(), "not continuous")
+
 	blockNum, hash = w.Pop()
 	assert.True(t, blockNum == 2 && hash == "hash2")
 
