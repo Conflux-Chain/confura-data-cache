@@ -114,7 +114,7 @@ func (c *EthCache) GetTransactionByHash(txHash common.Hash) *ethTypes.Transactio
 }
 
 // GetBlockReceiptsByHash returns the receipts of a given block hash.
-func (c *EthCache) GetBlockReceiptsByHash(blockHash common.Hash) []*ethTypes.Receipt {
+func (c *EthCache) GetBlockReceiptsByHash(blockHash common.Hash) []ethTypes.Receipt {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -127,7 +127,7 @@ func (c *EthCache) GetBlockReceiptsByHash(blockHash common.Hash) []*ethTypes.Rec
 }
 
 // GetBlockReceiptsByNumber returns the receipts of a given block number.
-func (c *EthCache) GetBlockReceiptsByNumber(blockNumber uint64) []*ethTypes.Receipt {
+func (c *EthCache) GetBlockReceiptsByNumber(blockNumber uint64) []ethTypes.Receipt {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -155,7 +155,7 @@ func (c *EthCache) GetTransactionReceipt(txHash common.Hash) *ethTypes.Receipt {
 	}
 
 	receipt := data.Receipts[txIndex.transactionIndex]
-	return receipt
+	return &receipt
 }
 
 // GetBlockTracesByHash returns all traces produced at given block by hash
