@@ -16,7 +16,9 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	config.MustInit("CDC")
+	cobra.OnInitialize(func() {
+		config.MustInit("CDC")
+	})
 
 	log.BindFlags(rootCmd)
 }
@@ -25,5 +27,17 @@ func init() {
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		logrus.WithError(err).Fatal("Failed to execute command")
+	}
+}
+
+func fatalOnErr(err error, msg string, fields ...logrus.Fields) {
+	if err == nil {
+		return
+	}
+
+	if len(fields) > 0 {
+		logrus.WithError(err).WithFields(fields[0]).Fatal(msg)
+	} else {
+		logrus.WithError(err).Fatal(msg)
 	}
 }
