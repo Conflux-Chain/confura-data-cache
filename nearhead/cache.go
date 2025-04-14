@@ -4,6 +4,8 @@ import (
 	"sync"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/viper"
+	"github.com/DmitriyVTitov/size"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -11,18 +13,33 @@ import (
 
 // EthCache is used to cache near head data
 type EthCache struct {
-	lastBlockNumber        *uint64
+	firstBlockNumber *uint64
+	lastBlockNumber  *uint64
+
 	blockNumber2BlockDatas map[uint64]*types.EthBlockData
 	blockHash2BlockNumbers map[common.Hash]uint64
 	txHash2TxIndexes       map[common.Hash]TransactionIndex
-	rwMutex                sync.RWMutex
+
+	maxMemory             uint64 //in bytes
+	currentSize           uint64 // in bytes
+	blockNumber2BlockSize map[uint64]uint64
+
+	rwMutex sync.RWMutex
 }
 
 func NewEthCache() *EthCache {
+	var cfg struct {
+		MaxMemory uint64 `default:"104857600"` // 100MG
+	}
+	viper.MustUnmarshalKey("nearHead", &cfg)
+
 	return &EthCache{
 		blockNumber2BlockDatas: make(map[uint64]*types.EthBlockData),
 		blockHash2BlockNumbers: make(map[common.Hash]uint64),           // mapping from block hash to number, for query by block hash
 		txHash2TxIndexes:       make(map[common.Hash]TransactionIndex), // mapping from tx hash to block number and tx index, for query by tx hash
+
+		maxMemory:             cfg.MaxMemory,
+		blockNumber2BlockSize: make(map[uint64]uint64), // mapping from block number to block data size
 	}
 }
 
@@ -40,10 +57,23 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 		}
 	}
 
-	// TODO evict if exceeds maxsize
+	// evict block data from the oldest block number
+	dataSize := uint64(size.Of(data))
+	if c.currentSize+dataSize > c.maxMemory {
+		for bn := *c.firstBlockNumber; bn <= *c.lastBlockNumber; bn++ {
+			c.pop(bn)
+			if c.currentSize+dataSize <= c.maxMemory {
+				break
+			}
+		}
+	}
 
-	c.blockNumber2BlockDatas[bn] = data
+	// push data
+	if c.firstBlockNumber == nil {
+		c.firstBlockNumber = &bn
+	}
 	c.lastBlockNumber = &bn
+	c.blockNumber2BlockDatas[bn] = data
 	c.blockHash2BlockNumbers[data.Block.Hash] = bn
 	for i, tx := range data.Block.Transactions.Transactions() {
 		c.txHash2TxIndexes[tx.Hash] = TransactionIndex{
@@ -52,7 +82,37 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 		}
 	}
 
+	// count data size
+	c.blockNumber2BlockSize[bn] = dataSize
+	c.currentSize += dataSize
+
 	return nil
+}
+
+func (c *EthCache) pop(blockNumber uint64) {
+	data, exists := c.blockNumber2BlockDatas[blockNumber]
+	if !exists {
+		return
+	}
+
+	next := blockNumber + 1
+	if next <= *c.lastBlockNumber {
+		c.firstBlockNumber = &next
+	} else {
+		c.firstBlockNumber = nil
+		c.lastBlockNumber = nil
+	}
+
+	delete(c.blockNumber2BlockDatas, blockNumber)
+	delete(c.blockHash2BlockNumbers, data.Block.Hash)
+	txs := data.Block.Transactions.Transactions()
+	for _, tx := range txs {
+		delete(c.txHash2TxIndexes, tx.Hash)
+	}
+
+	dataSize := c.blockNumber2BlockSize[blockNumber]
+	c.currentSize = max(c.currentSize-dataSize, 0)
+	delete(c.blockNumber2BlockSize, blockNumber)
 }
 
 // GetBlockByNumber returns block with given number.

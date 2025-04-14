@@ -2,6 +2,7 @@ package nearhead
 
 import (
 	"encoding/json"
+	"math/big"
 	"testing"
 
 	cdcTypes "github.com/Conflux-Chain/confura-data-cache/types"
@@ -38,10 +39,82 @@ func createTestData(t *testing.T) *cdcTypes.EthBlockData {
 	}
 }
 
+func createTestDataBatch(t *testing.T, size int) []cdcTypes.EthBlockData {
+	datas := make([]cdcTypes.EthBlockData, 0, size)
+	for i := 0; i < size; i++ {
+		data := createTestData(t)
+		data.Block.Number = incrNumber(data.Block.Number, int64(i))
+		data.Block.Hash = incrHash(data.Block.Hash, int64(i))
+		for _, tx := range data.Block.Transactions.Transactions() {
+			tx.Hash = incrHash(tx.Hash, int64(i))
+		}
+		datas = append(datas, *data)
+	}
+	return datas
+}
+
+func incrNumber(number *big.Int, val ...int64) *big.Int {
+	var delta *big.Int
+	if len(val) > 0 {
+		delta = big.NewInt(val[0])
+	} else {
+		delta = big.NewInt(1)
+	}
+
+	sum := new(big.Int)
+	sum.Add(number, delta)
+
+	return sum
+}
+
+func incrHash(hash common.Hash, val ...int64) common.Hash {
+	var delta *big.Int
+	if len(val) > 0 {
+		delta = big.NewInt(val[0])
+	} else {
+		delta = big.NewInt(1)
+	}
+
+	sum := new(big.Int)
+	sum.Add(hash.Big(), delta)
+
+	return common.BigToHash(sum)
+}
+
 func TestEthCache_Put(t *testing.T) {
 	cache := createTestCache()
+
+	// add one block
 	data := createTestData(t)
 	assert.Nil(t, cache.Put(data))
+	assert.Greater(t, *cache.firstBlockNumber, uint64(0))
+	assert.Greater(t, *cache.lastBlockNumber, uint64(0))
+	assert.Greater(t, cache.currentSize, uint64(0))
+
+	// pop one block
+	cache.pop(data.Block.Number.Uint64())
+	assert.Nil(t, cache.firstBlockNumber)
+	assert.Nil(t, cache.lastBlockNumber)
+	assert.Equal(t, cache.currentSize, uint64(0))
+
+	// add multi blocks
+	size := 100
+	datas := createTestDataBatch(t, size)
+	for _, data := range datas {
+		assert.Nil(t, cache.Put(&data))
+	}
+	assert.Equal(t, *cache.lastBlockNumber, uint64(120177555+size-1))
+	assert.Greater(t, cache.currentSize, uint64(0))
+	assert.Less(t, cache.currentSize, cache.maxMemory)
+
+	// pop multi block
+	firstBlockNumber := *cache.firstBlockNumber
+	for i := 0; i < size; i++ {
+		cache.pop(firstBlockNumber + uint64(i))
+	}
+	assert.Nil(t, cache.firstBlockNumber)
+	assert.Nil(t, cache.lastBlockNumber)
+	assert.Equal(t, cache.currentSize, uint64(0))
 }
 
 func TestEthCache_GetBlockByHash(t *testing.T) {
