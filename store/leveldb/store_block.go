@@ -41,12 +41,8 @@ func (store *Store) getBlockNumberByHash(hash common.Hash) (uint64, bool, error)
 // GetBlockByHash returns block for the given block hash. If not found, returns nil.
 func (store *Store) GetBlockByHash(hash common.Hash) (*types.Block, error) {
 	number, ok, err := store.getBlockNumberByHash(hash)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	return store.GetBlockByNumber(number)
@@ -59,12 +55,8 @@ func (store *Store) GetBlockByNumber(number uint64) (*types.Block, error) {
 
 	var block types.Block
 	ok, err := store.readJson(store.keyBlockNumber2BlockPool, blockNumberBuf[:], &block)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	return &block, nil
@@ -74,12 +66,8 @@ func (store *Store) GetBlockByNumber(number uint64) (*types.Block, error) {
 // Returns -1 if the given block hash not found.
 func (store *Store) GetBlockTransactionCountByHash(blockHash common.Hash) (int64, error) {
 	blockNumber, ok, err := store.getBlockNumberByHash(blockHash)
-	if err != nil {
-		return 0, err
-	}
-
-	if !ok {
-		return -1, nil
+	if err != nil || !ok {
+		return -1, err
 	}
 
 	return store.GetBlockTransactionCountByNumber(blockNumber)
@@ -92,12 +80,8 @@ func (store *Store) GetBlockTransactionCountByNumber(blockNumber uint64) (int64,
 	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
 
 	value, ok, err := store.read(store.keyBlockNumber2TxCountPool, blockNumberBuf[:], 8)
-	if err != nil {
-		return 0, err
-	}
-
-	if !ok {
-		return -1, nil
+	if err != nil || !ok {
+		return -1, err
 	}
 
 	count := binary.BigEndian.Uint64(value)

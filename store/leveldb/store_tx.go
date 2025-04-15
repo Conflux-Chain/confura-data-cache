@@ -41,12 +41,8 @@ func (store *Store) getBlockNumberAndIndexByTransactionHash(txHash common.Hash) 
 // GetTransactionByHash returns transaction for the given transaction hash. If not found, returns nil.
 func (store *Store) GetTransactionByHash(txHash common.Hash) (*types.TransactionDetail, error) {
 	blockNumber, txIndex, ok, err := store.getBlockNumberAndIndexByTransactionHash(txHash)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	return store.GetTransactionByBlockNumberAndIndex(blockNumber, txIndex)
@@ -55,12 +51,8 @@ func (store *Store) GetTransactionByHash(txHash common.Hash) (*types.Transaction
 // GetTransactionByBlockHashAndIndex returns transaction for the given block hash and transaction index. If not found, returns nil.
 func (store *Store) GetTransactionByBlockHashAndIndex(blockHash common.Hash, txIndex uint32) (*types.TransactionDetail, error) {
 	blockNumber, ok, err := store.getBlockNumberByHash(blockHash)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	return store.GetTransactionByBlockNumberAndIndex(blockNumber, txIndex)

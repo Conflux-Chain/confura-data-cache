@@ -50,12 +50,8 @@ func (store *Store) read(pool *KeyPool, key []byte, expectedValueSize ...int) ([
 
 func (store *Store) readJson(pool *KeyPool, key []byte, valuePointer any) (bool, error) {
 	value, ok, err := store.read(pool, key)
-	if err != nil {
+	if err != nil || !ok {
 		return false, err
-	}
-
-	if !ok {
-		return false, nil
 	}
 
 	if err = json.Unmarshal(value, valuePointer); err != nil {
