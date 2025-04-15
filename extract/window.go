@@ -2,6 +2,7 @@ package extract
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
@@ -17,6 +18,7 @@ type BlockHashCache struct {
 	capacity    uint
 	blockHashes map[uint64]common.Hash
 	start, end  uint64
+	finalized   atomic.Uint64
 	provider    FinalizedHeightProvider
 }
 
@@ -46,6 +48,8 @@ func (w *BlockHashCache) Len() int {
 // - eviction of finalized blocks (if a provider is configured),
 // - continuity of block numbers.
 func (w *BlockHashCache) Append(blockNumber uint64, blockHash common.Hash) error {
+	w.initializeFinalizedBlockNumber()
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -54,9 +58,7 @@ func (w *BlockHashCache) Append(blockNumber uint64, blockHash common.Hash) error
 		return errors.Errorf("block number not continuous, expected %v got %v", w.end+1, blockNumber)
 	}
 
-	if err := w.purgeFinalized(); err != nil {
-		return err
-	}
+	w.purgeFinalized()
 	w.evictIfFull()
 
 	// Initialize window range on first insert
@@ -70,17 +72,23 @@ func (w *BlockHashCache) Append(blockNumber uint64, blockHash common.Hash) error
 
 // purgeFinalized removes all blocks up to the finalized block number,
 // if a provider is configured and capacity is 0.
-func (w *BlockHashCache) purgeFinalized() error {
-	if w.capacity > 0 || w.provider == nil || len(w.blockHashes) == 0 {
-		return nil
+func (w *BlockHashCache) purgeFinalized() {
+	if w.capacity == 0 && w.provider != nil && len(w.blockHashes) > 0 {
+		finalized := w.finalized.Load()
+		for w.start <= min(finalized, w.end) {
+			delete(w.blockHashes, w.start)
+			w.start++
+		}
 	}
-	finalized, err := w.provider()
-	if err != nil {
-		return errors.WithMessage(err, "failed to get finalized block number")
-	}
-	for w.start <= min(finalized, w.end) {
-		delete(w.blockHashes, w.start)
-		w.start++
+}
+
+func (w *BlockHashCache) initializeFinalizedBlockNumber() error {
+	if w.provider != nil {
+		number, err := w.provider()
+		if err != nil {
+			return errors.WithMessage(err, "failed to get finalized block number")
+		}
+		w.finalized.Store(number)
 	}
 	return nil
 }
@@ -97,24 +105,24 @@ func (w *BlockHashCache) evictIfFull() {
 }
 
 // Latest returns the most recent block number and its corresponding hash.
-func (w *BlockHashCache) Latest() (uint64, common.Hash) {
+func (w *BlockHashCache) Latest() (uint64, common.Hash, bool) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	if len(w.blockHashes) == 0 {
-		return 0, common.Hash{}
+		return 0, common.Hash{}, false
 	}
-	return w.end, w.blockHashes[w.end]
+	return w.end, w.blockHashes[w.end], true
 }
 
 // Pop removes and returns the latest block number and hash.
-func (w *BlockHashCache) Pop() (uint64, common.Hash) {
+func (w *BlockHashCache) Pop() (uint64, common.Hash, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if len(w.blockHashes) == 0 {
-		return 0, common.Hash{}
+		return 0, common.Hash{}, false
 	}
 	bn, hash := w.end, w.blockHashes[w.end]
 	delete(w.blockHashes, w.end)
 	w.end--
-	return bn, hash
+	return bn, hash, true
 }

@@ -104,7 +104,7 @@ func (e *EthExtractor) extractOnce() (*types.EthBlockData, bool, error) {
 	}
 
 	// Check for reorgs by comparing the block parent hash with the hashes in the hash window.
-	if bn, bh := e.hashCache.Latest(); bn > 0 && bh != blockData.Block.ParentHash {
+	if bn, bh, ok := e.hashCache.Latest(); ok && bh != blockData.Block.ParentHash {
 		e.StartBlockNumber = bn
 		e.hashCache.Pop()
 

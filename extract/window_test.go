@@ -22,8 +22,8 @@ func TestBlockHashCache(t *testing.T) {
 	assert.Equal(t, 2, cwp.Len())
 
 	// Test getting latest element
-	blockNum, blockHash := cwp.Latest()
-	assert.True(t, blockNum == 2 && blockHash == common.HexToHash("0x2"))
+	blockNum, blockHash, ok := cwp.Latest()
+	assert.True(t, ok && blockNum == 2 && blockHash == common.HexToHash("0x2"))
 
 	// Test non-sequential fails
 	err = cwp.Append(4, common.HexToHash("0x2"))
@@ -36,21 +36,21 @@ func TestBlockHashCache(t *testing.T) {
 	assert.Equal(t, 2, cwp.Len())
 
 	// Test popping elements
-	blockNum, hash := cwp.Pop()
-	assert.True(t, blockNum == 3 && hash == common.HexToHash("0x3"))
+	blockNum, hash, ok := cwp.Pop()
+	assert.True(t, ok && blockNum == 3 && hash == common.HexToHash("0x3"))
 
 	// Test appending after pop
 	err = cwp.Append(4, common.HexToHash("0x4"))
 	assert.Contains(t, err.Error(), "not continuous")
 
-	blockNum, hash = cwp.Pop()
-	assert.True(t, blockNum == 2 && hash == common.HexToHash("0x2"))
+	blockNum, hash, ok = cwp.Pop()
+	assert.True(t, ok && blockNum == 2 && hash == common.HexToHash("0x2"))
 
 	assert.Equal(t, 0, cwp.Len())
 
 	// Test empty popping
-	blockNum, hash = cwp.Pop()
-	assert.True(t, blockNum == 0 && hash == common.Hash{})
+	blockNum, hash, ok = cwp.Pop()
+	assert.True(t, !ok && blockNum == 0 && hash == common.Hash{})
 
 	// Cache with provider
 	cp := extract.NewBlockHashCache(0, func() (uint64, error) {
