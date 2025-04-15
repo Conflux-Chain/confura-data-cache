@@ -2,11 +2,14 @@ package extract
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/openweb3/go-rpc-provider"
 	"github.com/openweb3/web3go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // EthExtractor is an EVM compatible blockchain data extractor.
@@ -18,7 +21,9 @@ import (
 // 5. add memory threshold limit to avoid OOM
 type EthExtractor struct {
 	EthConfig
-	rpcClient *web3go.Client // Connected RPC clients for fetching blockchain data
+
+	hashCache *BlockHashCache // Cache of recent block hashes for detecting reorgs
+	rpcClient *web3go.Client  // Connected RPC client for fetching blockchain data
 }
 
 func NewEvmExtractor(conf EthConfig) (*EthExtractor, error) {
@@ -31,9 +36,18 @@ func NewEvmExtractor(conf EthConfig) (*EthExtractor, error) {
 		return nil, errors.WithMessagef(err, "failed to create rpc client for endpoint %s", conf.RpcEndpoint)
 	}
 
+	finalizedBlockProvider := func() (uint64, error) {
+		block, err := client.Eth.BlockByNumber(rpc.FinalizedBlockNumber, false)
+		if err != nil {
+			return 0, err
+		}
+		return block.Number.Uint64(), nil
+	}
+
 	return &EthExtractor{
 		EthConfig: conf,
 		rpcClient: client,
+		hashCache: NewBlockHashCache(0, finalizedBlockProvider),
 	}, nil
 }
 
@@ -86,7 +100,31 @@ func (e *EthExtractor) extractOnce() (*types.EthBlockData, bool, error) {
 
 	// Verify the block data
 	if err := blockData.Verify(); err != nil {
-		return nil, false, errors.WithMessage(err, "failed to validate block data")
+		return nil, false, NewInconsistentChainDataError(err.Error())
+	}
+
+	// Check for reorgs by comparing the block parent hash with the hashes in the hash window.
+	if bn, bh, ok := e.hashCache.Latest(); ok && bh != blockData.Block.ParentHash {
+		e.StartBlockNumber = bn
+		e.hashCache.Pop()
+
+		detail := fmt.Sprintf(
+			"reorg detected: expected parent hash %s, got %s", bh, blockData.Block.ParentHash,
+		)
+		return nil, false, NewInconsistentChainDataError(detail)
+	} else {
+		// TODO: Support custom reorg check function from users if block hash is missing.
+		logrus.WithFields(logrus.Fields{
+			"blockNumber": blockData.Block.Number,
+			"blockHash":   blockData.Block.Hash,
+			"parentHash":  blockData.Block.ParentHash,
+		}).Warn("Reorg check skipped: block hash not found in cache")
+	}
+
+	// Append the block hash into the cache for future reorg checks.
+	bn, bh := blockData.Block.Number.Uint64(), blockData.Block.Hash
+	if err := e.hashCache.Append(bn, bh); err != nil {
+		return nil, false, errors.WithMessage(err, "failed to cache block hash")
 	}
 
 	e.StartBlockNumber++
