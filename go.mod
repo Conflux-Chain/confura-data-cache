@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	github.com/Conflux-Chain/go-conflux-util v0.2.2-0.20250114102326-5a181f74ec59
+	github.com/DmitriyVTitov/size v1.5.0
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/openweb3/web3go v0.2.11
 	github.com/pkg/errors v0.9.1
@@ -15,7 +16,6 @@ require (
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
-	github.com/DmitriyVTitov/size v1.5.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/PagerDuty/go-pagerduty v1.8.0 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect

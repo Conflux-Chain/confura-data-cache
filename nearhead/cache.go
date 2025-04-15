@@ -4,42 +4,39 @@ import (
 	"sync"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
-	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/DmitriyVTitov/size"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 )
 
+// Config is cache configurations
+type Config struct {
+	MaxMemory uint64 `default:"104857600"` // 100MG
+}
+
 // EthCache is used to cache near head data
 type EthCache struct {
-	firstBlockNumber *uint64
-	lastBlockNumber  *uint64
+	config  Config
+	rwMutex sync.RWMutex
 
+	start                  uint64 // the first block number, inclusive
+	end                    uint64 // the last block number, exclusive
 	blockNumber2BlockDatas map[uint64]*types.EthBlockData
 	blockHash2BlockNumbers map[common.Hash]uint64
 	txHash2TxIndexes       map[common.Hash]TransactionIndex
 
-	maxMemory             uint64 //in bytes
 	currentSize           uint64 // in bytes
 	blockNumber2BlockSize map[uint64]uint64
-
-	rwMutex sync.RWMutex
 }
 
-func NewEthCache() *EthCache {
-	var cfg struct {
-		MaxMemory uint64 `default:"104857600"` // 100MG
-	}
-	viper.MustUnmarshalKey("nearHead", &cfg)
-
+func NewEthCache(config Config) *EthCache {
 	return &EthCache{
+		config:                 config,
 		blockNumber2BlockDatas: make(map[uint64]*types.EthBlockData),
 		blockHash2BlockNumbers: make(map[common.Hash]uint64),           // mapping from block hash to number, for query by block hash
 		txHash2TxIndexes:       make(map[common.Hash]TransactionIndex), // mapping from tx hash to block number and tx index, for query by tx hash
-
-		maxMemory:             cfg.MaxMemory,
-		blockNumber2BlockSize: make(map[uint64]uint64), // mapping from block number to block data size
+		blockNumber2BlockSize:  make(map[uint64]uint64),                // mapping from block number to block data size
 	}
 }
 
@@ -50,29 +47,24 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 
 	// check block number in sequence
 	bn := data.Block.Number.Uint64()
-	if c.lastBlockNumber != nil {
-		next := *c.lastBlockNumber + 1
-		if next != bn {
-			return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", next, bn)
-		}
+	if c.end > 0 && c.end != bn {
+		return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", c.end, bn)
 	}
 
-	// evict block data from the oldest block number
+	// check if exceeds max memory
 	dataSize := uint64(size.Of(data))
-	if c.currentSize+dataSize > c.maxMemory {
-		for bn := *c.firstBlockNumber; bn <= *c.lastBlockNumber; bn++ {
-			c.pop(bn)
-			if c.currentSize+dataSize <= c.maxMemory {
-				break
-			}
-		}
+	if dataSize > c.config.MaxMemory {
+		return errors.Errorf("Block data exceeds max memory, bn = %v, size = %v, max = %v", bn, dataSize, c.config.MaxMemory)
+	}
+	for c.currentSize+dataSize > c.config.MaxMemory {
+		c.pop()
 	}
 
 	// push data
-	if c.firstBlockNumber == nil {
-		c.firstBlockNumber = &bn
+	if c.start == uint64(0) {
+		c.start = bn
 	}
-	c.lastBlockNumber = &bn
+	c.end = bn + uint64(1)
 	c.blockNumber2BlockDatas[bn] = data
 	c.blockHash2BlockNumbers[data.Block.Hash] = bn
 	for i, tx := range data.Block.Transactions.Transactions() {
@@ -89,30 +81,41 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 	return nil
 }
 
-func (c *EthCache) pop(blockNumber uint64) {
-	data, exists := c.blockNumber2BlockDatas[blockNumber]
+// pop always remove the earliest block data.
+func (c *EthCache) pop() {
+	if c.start >= c.end {
+		c.resetPosition()
+		return
+	}
+
+	bn := c.start
+	data, exists := c.blockNumber2BlockDatas[bn]
 	if !exists {
 		return
 	}
 
-	next := blockNumber + 1
-	if next <= *c.lastBlockNumber {
-		c.firstBlockNumber = &next
-	} else {
-		c.firstBlockNumber = nil
-		c.lastBlockNumber = nil
-	}
-
-	delete(c.blockNumber2BlockDatas, blockNumber)
+	// pop data
+	delete(c.blockNumber2BlockDatas, bn)
 	delete(c.blockHash2BlockNumbers, data.Block.Hash)
 	txs := data.Block.Transactions.Transactions()
 	for _, tx := range txs {
 		delete(c.txHash2TxIndexes, tx.Hash)
 	}
 
-	dataSize := c.blockNumber2BlockSize[blockNumber]
-	c.currentSize = max(c.currentSize-dataSize, 0)
-	delete(c.blockNumber2BlockSize, blockNumber)
+	// subtract data size
+	dataSize := c.blockNumber2BlockSize[bn]
+	c.currentSize = c.currentSize - dataSize
+	delete(c.blockNumber2BlockSize, bn)
+
+	c.start += 1
+	if c.start >= c.end {
+		c.resetPosition()
+	}
+}
+
+func (c *EthCache) resetPosition() {
+	c.start = uint64(0)
+	c.end = uint64(0)
 }
 
 // GetBlockByNumber returns block with given number.
