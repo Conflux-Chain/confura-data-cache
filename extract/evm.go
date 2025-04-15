@@ -23,7 +23,7 @@ type EthExtractor struct {
 	EthConfig
 
 	hashCache *BlockHashCache // Cache of recent block hashes for detecting reorgs
-	rpcClient *web3go.Client  // Connected RPC clients for fetching blockchain data
+	rpcClient *web3go.Client  // Connected RPC client for fetching blockchain data
 }
 
 func NewEvmExtractor(conf EthConfig) (*EthExtractor, error) {
@@ -121,7 +121,7 @@ func (e *EthExtractor) extractOnce() (*types.EthBlockData, bool, error) {
 		}).Warn("Reorg check skipped: block hash not found in cache")
 	}
 
-	// Push the block hash into the hash window for future reorg checks.
+	// Append the block hash into the cache for future reorg checks.
 	bn, bh := blockData.Block.Number.Uint64(), blockData.Block.Hash
 	if err := e.hashCache.Append(bn, bh); err != nil {
 		return nil, false, errors.WithMessage(err, "failed to cache block hash")
