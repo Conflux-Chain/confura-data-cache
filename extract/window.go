@@ -55,7 +55,9 @@ func (w *BlockHashWindow[T]) Push(blockNumber uint64, blockHash T) error {
 	w.buff[w.next] = blockHash
 
 	w.next = (w.next + 1) % len(w.buff)
-	w.count = min(w.count+1, len(w.buff))
+	if w.count < len(w.buff) {
+		w.count++
+	}
 	return nil
 }
 

@@ -94,8 +94,8 @@ func (e *EthExtractor) extractOnce() (*types.EthBlockData, bool, error) {
 	}
 
 	// Check for reorgs by comparing the block parent hash with the hashes in the hash window.
-	if _, bh, ok := e.hashWindow.Peek(); ok && bh != blockData.Block.ParentHash {
-		e.StartBlockNumber--
+	if bn, bh, ok := e.hashWindow.Peek(); ok && bh != blockData.Block.ParentHash {
+		e.StartBlockNumber = bn
 		e.hashWindow.Pop()
 
 		detail := fmt.Sprintf(
@@ -105,7 +105,8 @@ func (e *EthExtractor) extractOnce() (*types.EthBlockData, bool, error) {
 	}
 
 	// Push the block hash into the hash window for future reorg checks.
-	if err := e.hashWindow.Push(blockData.Block.Number.Uint64(), blockData.Block.Hash); err != nil {
+	bn, bh := blockData.Block.Number.Uint64(), blockData.Block.Hash
+	if err := e.hashWindow.Push(bn, bh); err != nil {
 		return nil, false, errors.WithMessage(err, "failed to push block hash into window")
 	}
 
