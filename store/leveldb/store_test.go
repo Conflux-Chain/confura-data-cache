@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func createTestStore(t *testing.T) (*Store, func()) {
+func createTestStore(t *testing.T, defaultNextBlockNumber ...uint64) (*Store, func()) {
 	path, err := os.MkdirTemp("", "confura-data-cache-")
 	assert.Nil(t, err)
 
-	store, err := NewStore(path)
+	store, err := NewStore(path, defaultNextBlockNumber...)
 	assert.Nil(t, err)
 
 	return store, func() {
@@ -105,4 +105,34 @@ func TestStoreWrite(t *testing.T) {
 	assert.Equal(t, uint64(3), next)
 
 	assert.Equal(t, uint64(3), store.NextBlockNumber())
+}
+
+func TestStoreCustomNextBlockNumber(t *testing.T) {
+	store, close := createTestStore(t, 7)
+	defer close()
+
+	assert.Equal(t, uint64(7), store.NextBlockNumber())
+}
+
+func TestStoreBreakPoint(t *testing.T) {
+	path, err := os.MkdirTemp("", "confura-data-cache-")
+	assert.Nil(t, err)
+
+	store, err := NewStore(path)
+	assert.Nil(t, err)
+	assert.Equal(t, uint64(0), store.NextBlockNumber())
+
+	// write block 0 & 1
+	store.Write(createTestEthData(0, common.HexToHash("0x6660")))
+	store.Write(createTestEthData(1, common.HexToHash("0x6661")))
+
+	// close store
+	assert.Nil(t, store.Close())
+
+	// reopen db again
+	store, err = NewStore(path)
+	assert.Nil(t, err)
+
+	// start from block 2
+	assert.Equal(t, uint64(2), store.NextBlockNumber())
 }
