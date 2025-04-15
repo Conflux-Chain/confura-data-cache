@@ -7,96 +7,114 @@ import (
 	"github.com/pkg/errors"
 )
 
-// BlockHashWindow caches block hashes in a ring buffer for reorg check.
-type BlockHashWindow[T any] struct {
-	mu     sync.RWMutex
-	next   int    // Index for next write
-	count  int    // Current number of elements
-	buff   []T    // Ring buffer of block hashes
-	latest uint64 // Latest block number
+type FinalizedHeightProvider func() (uint64, error)
+
+// BlockHashCache maintains a fixed-size sliding window of block hashes,
+// mapping block numbers to hashes. Old entries are evicted automatically
+// based on either fixed capacity or finalized block height.
+type BlockHashCache struct {
+	mu          sync.RWMutex
+	capacity    uint
+	blockHashes map[uint64]common.Hash
+	start, end  uint64
+	provider    FinalizedHeightProvider
 }
 
-// NewBlockHashWindow creates a fixed-size window for block hashes.
-func NewBlockHashWindow[T any](size int) *BlockHashWindow[T] {
-	if size <= 0 {
-		panic("window size must be positive")
+// NewBlockHashCache creates a new BlockHashCache with optional finalized height provider.
+// If capacity is 0, eviction is based on finalized block height.
+func NewBlockHashCache(size uint, providers ...FinalizedHeightProvider) *BlockHashCache {
+	var p FinalizedHeightProvider
+	if len(providers) > 0 {
+		p = providers[0]
 	}
-	return &BlockHashWindow[T]{
-		buff: make([]T, size),
+	return &BlockHashCache{
+		capacity:    size,
+		provider:    p,
+		blockHashes: make(map[uint64]common.Hash),
 	}
 }
 
-// Capacity returns the window capacity.
-func (w *BlockHashWindow[T]) Capacity() int {
+// Len returns the current number of block hashes in the cache.
+func (w *BlockHashCache) Len() int {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-
-	return len(w.buff)
+	return len(w.blockHashes)
 }
 
-// Len returns current number of elements in the buffer.
-func (w *BlockHashWindow[T]) Len() int {
-	w.mu.RLock()
-	defer w.mu.RUnlock()
-
-	return w.count
-}
-
-// Push inserts a new block hash into the ring buffer.
-func (w *BlockHashWindow[T]) Push(blockNumber uint64, blockHash T) error {
+// Append inserts a new block hash into the cache. It enforces:
+// - automatic eviction if the cache is full (capacity-based),
+// - eviction of finalized blocks (if a provider is configured),
+// - continuity of block numbers.
+func (w *BlockHashCache) Append(blockNumber uint64, blockHash common.Hash) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	if w.count > 0 && blockNumber != w.latest+1 {
-		return errors.Errorf("block number not continuous, expected %v got %v", w.latest+1, blockNumber)
+	// Enforce block number continuity (monotonic increase by 1)
+	if len(w.blockHashes) > 0 && blockNumber != w.end+1 {
+		return errors.Errorf("block number not continuous, expected %v got %v", w.end+1, blockNumber)
 	}
 
-	w.latest = blockNumber
-	w.buff[w.next] = blockHash
+	if err := w.purgeFinalized(); err != nil {
+		return err
+	}
+	w.evictIfFull()
 
-	w.next = (w.next + 1) % len(w.buff)
-	if w.count < len(w.buff) {
-		w.count++
+	// Initialize window range on first insert
+	if len(w.blockHashes) == 0 {
+		w.start = blockNumber
+	}
+	w.end = blockNumber
+	w.blockHashes[blockNumber] = blockHash
+	return nil
+}
+
+// purgeFinalized removes all blocks up to the finalized block number,
+// if a provider is configured and capacity is 0.
+func (w *BlockHashCache) purgeFinalized() error {
+	if w.capacity > 0 || w.provider == nil || len(w.blockHashes) == 0 {
+		return nil
+	}
+	finalized, err := w.provider()
+	if err != nil {
+		return errors.WithMessage(err, "failed to get finalized block number")
+	}
+	for w.start <= min(finalized, w.end) {
+		delete(w.blockHashes, w.start)
+		w.start++
 	}
 	return nil
 }
 
-// Peek returns the latest block number and hash.
-func (w *BlockHashWindow[T]) Peek() (bn uint64, bh T, found bool) {
+// evictIfFull removes the oldest block hashes until capacity is satisfied.
+func (w *BlockHashCache) evictIfFull() {
+	if w.capacity == 0 || len(w.blockHashes) == 0 {
+		return
+	}
+	for len(w.blockHashes) >= int(w.capacity) {
+		delete(w.blockHashes, w.start)
+		w.start++
+	}
+}
+
+// Latest returns the most recent block number and its corresponding hash.
+func (w *BlockHashCache) Latest() (uint64, common.Hash) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-
-	if w.count == 0 {
-		return
+	if len(w.blockHashes) == 0 {
+		return 0, common.Hash{}
 	}
-	idx := (w.next - 1 + len(w.buff)) % len(w.buff)
-	return w.latest, w.buff[idx], true
+	return w.end, w.blockHashes[w.end]
 }
 
-// Pop removes and returns the latest block hash.
-func (w *BlockHashWindow[T]) Pop() (bn uint64, bh T) {
+// Pop removes and returns the latest block number and hash.
+func (w *BlockHashCache) Pop() (uint64, common.Hash) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-
-	if w.count == 0 {
-		return
+	if len(w.blockHashes) == 0 {
+		return 0, common.Hash{}
 	}
-
-	idx := (w.next - 1 + len(w.buff)) % len(w.buff)
-	blockNum, hash := w.latest, w.buff[idx]
-
-	w.next = idx
-	w.buff[w.next] = *new(T) // Clear the slot
-
-	w.latest--
-	w.count--
-
-	return blockNum, hash
-}
-
-// EthBlockHashWindow is a specialized BlockHashWindow for Ethereum block hashes.
-type EthBlockHashWindow = BlockHashWindow[common.Hash]
-
-func NewEthBlockHashWindow(size int) *EthBlockHashWindow {
-	return (*EthBlockHashWindow)(NewBlockHashWindow[common.Hash](size))
+	bn, hash := w.end, w.blockHashes[w.end]
+	delete(w.blockHashes, w.end)
+	w.end--
+	return bn, hash
 }

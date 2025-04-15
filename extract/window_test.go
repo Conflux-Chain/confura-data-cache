@@ -4,53 +4,68 @@ import (
 	"testing"
 
 	"github.com/Conflux-Chain/confura-data-cache/extract"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBlockHashWindow(t *testing.T) {
-	w := extract.NewBlockHashWindow[string](2)
+func TestBlockHashCache(t *testing.T) {
+	// Cache without provider
+	cwp := extract.NewBlockHashCache(2)
 
-	// Test adding elements
-	err := w.Push(1, "hash1")
+	// Test appending elements
+	err := cwp.Append(1, common.HexToHash("0x1"))
 	assert.NoError(t, err)
-	assert.Equal(t, 1, w.Len())
+	assert.Equal(t, 1, cwp.Len())
 
-	err = w.Push(2, "hash2")
+	err = cwp.Append(2, common.HexToHash("0x2"))
 	assert.NoError(t, err)
-	assert.Equal(t, 2, w.Len())
+	assert.Equal(t, 2, cwp.Len())
 
-	// Test Peek
-	blockNum, blockHash, ok := w.Peek()
-	assert.True(t, ok && blockNum == 2 && blockHash == "hash2")
+	// Test getting latest element
+	blockNum, blockHash := cwp.Latest()
+	assert.True(t, blockNum == 2 && blockHash == common.HexToHash("0x2"))
 
 	// Test non-sequential fails
-	err = w.Push(4, "hash4")
+	err = cwp.Append(4, common.HexToHash("0x2"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not continuous")
 
-	// Test ring buffer overwrite
-	err = w.Push(3, "hash3")
+	// Test eviction
+	err = cwp.Append(3, common.HexToHash("0x3"))
 	assert.NoError(t, err)
-	assert.Equal(t, 2, w.Len())
+	assert.Equal(t, 2, cwp.Len())
 
-	// Test Pop
-	blockNum, hash := w.Pop()
-	assert.True(t, blockNum == 3 && hash == "hash3")
+	// Test popping elements
+	blockNum, hash := cwp.Pop()
+	assert.True(t, blockNum == 3 && hash == common.HexToHash("0x3"))
 
-	// Test push after pop
-	err = w.Push(4, "hash4")
+	// Test appending after pop
+	err = cwp.Append(4, common.HexToHash("0x4"))
 	assert.Contains(t, err.Error(), "not continuous")
 
-	blockNum, hash = w.Pop()
-	assert.True(t, blockNum == 2 && hash == "hash2")
+	blockNum, hash = cwp.Pop()
+	assert.True(t, blockNum == 2 && hash == common.HexToHash("0x2"))
 
-	assert.Equal(t, 0, w.Len())
+	assert.Equal(t, 0, cwp.Len())
 
-	// Test empty Pop
-	blockNum, hash = w.Pop()
-	assert.True(t, blockNum == 0 && hash == "")
+	// Test empty popping
+	blockNum, hash = cwp.Pop()
+	assert.True(t, blockNum == 0 && hash == common.Hash{})
 
-	// Test Peek on empty
-	blockNum, hash, ok = w.Peek()
-	assert.True(t, !ok && blockNum == 0 && hash == "")
+	// Cache with provider
+	cp := extract.NewBlockHashCache(0, func() (uint64, error) {
+		return 2, nil
+	})
+
+	// Test appending elements
+	err = cp.Append(1, common.HexToHash("0x1"))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, cp.Len())
+
+	err = cp.Append(2, common.HexToHash("0x2"))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, cp.Len())
+
+	err = cp.Append(2, common.HexToHash("0x3"))
+	assert.Contains(t, err.Error(), "not continuous")
 }
