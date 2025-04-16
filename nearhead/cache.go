@@ -52,7 +52,7 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 
 	// check if exceeds max memory
 	dataSize := data.Size()
-	for c.currentSize+dataSize > c.config.MaxMemory {
+	for c.end-c.start > 1 && c.currentSize+dataSize > c.config.MaxMemory {
 		c.evict()
 	}
 
@@ -79,18 +79,13 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 
 // evict always remove the earliest block data.
 func (c *EthCache) evict() {
-	// keep at least one block data
-	if c.end-c.start <= 1 {
-		return
-	}
-
 	bn := c.start
 	data, exists := c.blockNumber2BlockDatas[bn]
 	if !exists {
 		return
 	}
 
-	// pop data
+	// evict data
 	delete(c.blockNumber2BlockDatas, bn)
 	delete(c.blockHash2BlockNumbers, data.Block.Hash)
 	txs := data.Block.Transactions.Transactions()

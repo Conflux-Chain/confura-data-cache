@@ -111,9 +111,9 @@ func TestEthCache_Put(t *testing.T) {
 
 	// pop one block
 	cache.evict()
-	assert.Equal(t, cache.start, uint64(120177555))
+	assert.Equal(t, cache.start, uint64(120177556))
 	assert.Equal(t, cache.end, uint64(120177556))
-	assert.Equal(t, cache.currentSize, data.Size())
+	assert.Equal(t, cache.currentSize, uint64(0))
 
 	// add multi blocks
 	cache = createTestCache()
@@ -130,9 +130,9 @@ func TestEthCache_Put(t *testing.T) {
 	for i := 0; i < batchBlocks; i++ {
 		cache.evict()
 	}
-	assert.Equal(t, cache.start, uint64(120177555+batchBlocks-1))
+	assert.Equal(t, cache.start, uint64(120177555+batchBlocks))
 	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
-	assert.Greater(t, cache.currentSize, uint64(0))
+	assert.Equal(t, cache.currentSize, uint64(0))
 }
 
 func TestEthCache_GetBlockByHash(t *testing.T) {
