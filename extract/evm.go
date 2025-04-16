@@ -3,30 +3,76 @@ package extract
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
-	"github.com/openweb3/go-rpc-provider"
 	"github.com/openweb3/web3go"
+	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
+var (
+	_ EthRpcClient = (*Web3ClientAdapter)(nil)
+)
+
+// EthRpcClient defines a client interface for accessing Ethereum block data.
+type EthRpcClient interface {
+	io.Closer
+
+	// BlockHeaderByNumber fetches only the block header for a given block number (no full tx data).
+	BlockHeaderByNumber(ctx context.Context, bn ethTypes.BlockNumber) (*ethTypes.Block, error)
+
+	// BlockBundleByNumber fetches full block data including transactions, receipts, logs, traces, etc.
+	BlockBundleByNumber(ctx context.Context, bn ethTypes.BlockNumber) (types.EthBlockData, error)
+}
+
+// Web3ClientAdapter implements `EthRpcClient` by adapting a web3go client.
+type Web3ClientAdapter struct {
+	client *web3go.Client
+}
+
+// Close releases any held resources, such as network connections.
+func (p *Web3ClientAdapter) Close() error {
+	p.client.Close()
+	return nil
+}
+
+// BlockHeaderByNumber retrieves a light version of the block (header + tx hashes only).
+func (p *Web3ClientAdapter) BlockHeaderByNumber(ctx context.Context, bn ethTypes.BlockNumber) (*ethTypes.Block, error) {
+	return p.client.WithContext(ctx).Eth.BlockByNumber(bn, false)
+}
+
+// BlockBundleByNumber retrieves a full block bundle including associated data.
+func (p *Web3ClientAdapter) BlockBundleByNumber(ctx context.Context, bn ethTypes.BlockNumber) (types.EthBlockData, error) {
+	return types.QueryEthBlockData(p.client.WithContext(ctx), uint64(bn))
+}
+
+func newEthFinalizedHeightProvider(c EthRpcClient) FinalizedHeightProvider {
+	return func() (uint64, error) {
+		block, err := c.BlockHeaderByNumber(context.Background(), ethTypes.FinalizedBlockNumber)
+		if err != nil || block == nil {
+			return 0, err
+		}
+		return block.Number.Uint64(), nil
+	}
+}
+
 // EthExtractor is an EVM compatible blockchain data extractor.
 // TODO:
-// 1. add pivot reorg check to ensure data consistency
-// 2. add catch-up sync to allow concurrent syncing of multiple blocks
-// 3. add metrics, logging and monitoring
-// 4. add graceful shutdown to ensure data consistency
-// 5. add memory threshold limit to avoid OOM
+// - add catch-up sync to allow concurrent syncing of multiple blocks
+// - add metrics, logging and monitoring
+// - add graceful shutdown to ensure data consistency
+// - add memory threshold limit to avoid OOM
 type EthExtractor struct {
 	EthConfig
 
 	hashCache *BlockHashCache // Cache of recent block hashes for detecting reorgs
-	rpcClient *web3go.Client  // Connected RPC client for fetching blockchain data
+	rpcClient EthRpcClient    // Connected RPC client for fetching blockchain data
 }
 
-func NewEvmExtractor(conf EthConfig) (*EthExtractor, error) {
+func NewEvmExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthExtractor, error) {
 	if len(conf.RpcEndpoint) == 0 {
 		return nil, errors.New("no rpc endpoint provided")
 	}
@@ -36,19 +82,21 @@ func NewEvmExtractor(conf EthConfig) (*EthExtractor, error) {
 		return nil, errors.WithMessagef(err, "failed to create rpc client for endpoint %s", conf.RpcEndpoint)
 	}
 
-	finalizedBlockProvider := func() (uint64, error) {
-		block, err := client.Eth.BlockByNumber(rpc.FinalizedBlockNumber, false)
-		if err != nil {
-			return 0, err
-		}
-		return block.Number.Uint64(), nil
+	rpcClient := &Web3ClientAdapter{client}
+
+	var finalizeProvider FinalizedHeightProvider
+	if len(provider) > 0 {
+		finalizeProvider = provider[0]
+	} else {
+		finalizeProvider = newEthFinalizedHeightProvider(rpcClient)
 	}
 
-	return &EthExtractor{
+	extractor := &EthExtractor{
 		EthConfig: conf,
-		rpcClient: client,
-		hashCache: NewBlockHashCache(0, finalizedBlockProvider),
-	}, nil
+		rpcClient: rpcClient,
+		hashCache: NewBlockHashCacheWithProvider(finalizeProvider),
+	}
+	return extractor, nil
 }
 
 // Start starts the data extraction process. It will block until the context is canceled.
@@ -65,8 +113,8 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan chan<- types.EthBlock
 		default:
 		}
 
-		blockData, caughtUp, err := e.extractOnce()
-		if err == nil {
+		blockData, caughtUp, err := e.extractOnce(ctx)
+		if err == nil && blockData != nil {
 			dataChan <- *blockData
 		}
 
@@ -77,14 +125,14 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan chan<- types.EthBlock
 }
 
 // extractOnce fetches the block data for the current block number.
-func (e *EthExtractor) extractOnce() (*types.EthBlockData, bool, error) {
+func (e *EthExtractor) extractOnce(ctx context.Context) (*types.EthBlockData, bool, error) {
 	// Get the alignment block header to determine the actual target block number to synchronize against.
-	targetBlock, err := e.rpcClient.Eth.BlockByNumber(e.TargetBlockNumber, false)
+	targetBlock, err := e.rpcClient.BlockHeaderByNumber(ctx, e.TargetBlockNumber)
 	if err != nil {
-		return nil, false, errors.WithMessage(err, "failed to get target block heander")
+		return nil, false, errors.WithMessage(err, "failed to get target block")
 	}
 	if targetBlock == nil { // Should not happen but defensive check.
-		return nil, false, errors.Errorf("target block %v not found or invalid", e.TargetBlockNumber)
+		return nil, false, errors.Errorf("target block %v not found", e.TargetBlockNumber)
 	}
 
 	// Check if we are already caught up.
@@ -93,7 +141,7 @@ func (e *EthExtractor) extractOnce() (*types.EthBlockData, bool, error) {
 	}
 
 	// Fetch the block data for the current block number.
-	blockData, err := types.QueryEthBlockData(e.rpcClient, e.StartBlockNumber)
+	blockData, err := e.rpcClient.BlockBundleByNumber(ctx, ethTypes.BlockNumber(e.StartBlockNumber))
 	if err != nil {
 		return nil, false, errors.WithMessage(err, "failed to fetch block data")
 	}
@@ -104,21 +152,23 @@ func (e *EthExtractor) extractOnce() (*types.EthBlockData, bool, error) {
 	}
 
 	// Check for reorgs by comparing the block parent hash with the hashes in the hash window.
-	if bn, bh, ok := e.hashCache.Latest(); ok && bh != blockData.Block.ParentHash {
-		e.StartBlockNumber = bn
-		e.hashCache.Pop()
+	if bn, bh, ok := e.hashCache.Latest(); ok {
+		if bh != blockData.Block.ParentHash { // reorg detected
+			e.StartBlockNumber = bn
+			e.hashCache.Pop()
 
-		detail := fmt.Sprintf(
-			"reorg detected: expected parent hash %s, got %s", bh, blockData.Block.ParentHash,
-		)
-		return nil, false, NewInconsistentChainDataError(detail)
+			detail := fmt.Sprintf(
+				"reorg detected: expected parent hash %s, got %s", bh, blockData.Block.ParentHash,
+			)
+			return nil, false, NewInconsistentChainDataError(detail)
+		}
 	} else {
 		// TODO: Support custom reorg check function from users if block hash is missing.
 		logrus.WithFields(logrus.Fields{
 			"blockNumber": blockData.Block.Number,
 			"blockHash":   blockData.Block.Hash,
 			"parentHash":  blockData.Block.ParentHash,
-		}).Warn("Reorg check skipped: block hash not found in cache")
+		}).Info("Reorg check skipped: block hash not found in cache")
 	}
 
 	// Append the block hash into the cache for future reorg checks.

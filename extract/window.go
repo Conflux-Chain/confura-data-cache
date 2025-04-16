@@ -22,15 +22,17 @@ type BlockHashCache struct {
 	provider    FinalizedHeightProvider
 }
 
-// NewBlockHashCache creates a new BlockHashCache with optional finalized height provider.
-// If capacity is 0, eviction is based on finalized block height.
-func NewBlockHashCache(size uint, providers ...FinalizedHeightProvider) *BlockHashCache {
-	var p FinalizedHeightProvider
-	if len(providers) > 0 {
-		p = providers[0]
-	}
+// NewBlockHashCache creates a new BlockHashCache with the specified capacity.
+func NewBlockHashCache(size uint) *BlockHashCache {
 	return &BlockHashCache{
 		capacity:    size,
+		blockHashes: make(map[uint64]common.Hash),
+	}
+}
+
+// NewBlockHashCacheWithProvider creates a new BlockHashCache with the specified provider.
+func NewBlockHashCacheWithProvider(p FinalizedHeightProvider) *BlockHashCache {
+	return &BlockHashCache{
 		provider:    p,
 		blockHashes: make(map[uint64]common.Hash),
 	}
@@ -48,7 +50,9 @@ func (w *BlockHashCache) Len() int {
 // - eviction of finalized blocks (if a provider is configured),
 // - continuity of block numbers.
 func (w *BlockHashCache) Append(blockNumber uint64, blockHash common.Hash) error {
-	w.initializeFinalizedBlockNumber()
+	if err := w.initializeFinalizedBlockNumber(); err != nil {
+		return err
+	}
 
 	w.mu.Lock()
 	defer w.mu.Unlock()

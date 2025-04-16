@@ -53,7 +53,7 @@ func TestBlockHashCache(t *testing.T) {
 	assert.True(t, !ok && blockNum == 0 && hash == common.Hash{})
 
 	// Cache with provider
-	cp := extract.NewBlockHashCache(0, func() (uint64, error) {
+	cp := extract.NewBlockHashCacheWithProvider(func() (uint64, error) {
 		return 2, nil
 	})
 
