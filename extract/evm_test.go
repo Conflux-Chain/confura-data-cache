@@ -137,7 +137,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			},
 			EthConfig{TargetBlockNumber: ethTypes.LatestBlockNumber},
 			nil,
-			"failed to fetch target block",
+			"failed to get target block",
 			false,
 		},
 		{
