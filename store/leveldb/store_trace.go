@@ -23,12 +23,8 @@ func (store *Store) writeTraces(batch *leveldb.Batch, blockNumber uint64, traces
 // GetTransactionTraces returns all transaction traces for the given transaction hash. If not found, returns nil.
 func (store *Store) GetTransactionTraces(txHash common.Hash) ([]types.LocalizedTrace, error) {
 	blockNumber, txIndex, ok, err := store.getBlockNumberAndIndexByTransactionHash(txHash)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	blockTraces, err := store.GetBlockTracesByNumber(blockNumber)
@@ -49,12 +45,8 @@ func (store *Store) GetTransactionTraces(txHash common.Hash) ([]types.LocalizedT
 // GetBlockTracesByHash returns all block traces for the given block hash. If not found, returns nil.
 func (store *Store) GetBlockTracesByHash(blockHash common.Hash) ([]types.LocalizedTrace, error) {
 	blockNumber, ok, err := store.getBlockNumberByHash(blockHash)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	return store.GetBlockTracesByNumber(blockNumber)
@@ -67,12 +59,8 @@ func (store *Store) GetBlockTracesByNumber(blockNumber uint64) ([]types.Localize
 
 	var traces []types.LocalizedTrace
 	ok, err := store.readJson(store.keyBlockNumber2TracesPool, blockNumberBuf[:], &traces)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	return traces, nil

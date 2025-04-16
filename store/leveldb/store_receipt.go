@@ -23,12 +23,8 @@ func (store *Store) writeReceipts(batch *leveldb.Batch, blockNumber uint64, rece
 // GetTransactionReceipt returns receipt for the given transaction hash. If not found, returns nil.
 func (store *Store) GetTransactionReceipt(txHash common.Hash) (*types.Receipt, error) {
 	blockNumber, txIndex, ok, err := store.getBlockNumberAndIndexByTransactionHash(txHash)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	receipts, err := store.GetBlockReceiptsByNumber(blockNumber)
@@ -46,12 +42,8 @@ func (store *Store) GetTransactionReceipt(txHash common.Hash) (*types.Receipt, e
 // GetBlockReceiptsByHash returns all block receipts for the given block hash. If not found, returns nil.
 func (store *Store) GetBlockReceiptsByHash(blockHash common.Hash) ([]*types.Receipt, error) {
 	blockNumber, ok, err := store.getBlockNumberByHash(blockHash)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	return store.GetBlockReceiptsByNumber(blockNumber)
@@ -64,12 +56,8 @@ func (store *Store) GetBlockReceiptsByNumber(blockNumber uint64) ([]*types.Recei
 
 	var receipts []*types.Receipt
 	ok, err := store.readJson(store.keyBlockNumber2ReceiptsPool, blockNumberBuf[:], &receipts)
-	if err != nil {
+	if err != nil || !ok {
 		return nil, err
-	}
-
-	if !ok {
-		return nil, nil
 	}
 
 	return receipts, nil
