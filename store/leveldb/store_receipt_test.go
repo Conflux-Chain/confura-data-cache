@@ -41,13 +41,13 @@ func TestStoreGetBlockReceipts(t *testing.T) {
 
 	receipts, err := store.GetBlockReceiptsByHash(common.HexToHash("0x6660"))
 	assert.Nil(t, err)
-	assert.NotNil(t, receipts)
-	assert.Equal(t, 0, len(receipts))
+	assert.NotNil(t, receipts.MustLoad())
+	assert.Equal(t, 0, len(receipts.MustLoad()))
 
 	receipts, err = store.GetBlockReceiptsByNumber(0)
 	assert.Nil(t, err)
-	assert.NotNil(t, receipts)
-	assert.Equal(t, 0, len(receipts))
+	assert.NotNil(t, receipts.MustLoad())
+	assert.Equal(t, 0, len(receipts.MustLoad()))
 
 	// write block 1 with txs
 	store.Write(createTestEthData(1, common.HexToHash("0x6661"),
@@ -58,14 +58,14 @@ func TestStoreGetBlockReceipts(t *testing.T) {
 
 	receipts, err = store.GetBlockReceiptsByHash(common.HexToHash("0x6661"))
 	assert.Nil(t, err)
-	assert.Equal(t, 3, len(receipts))
+	assert.Equal(t, 3, len(receipts.MustLoad()))
 
 	receipts, err = store.GetBlockReceiptsByNumber(1)
 	assert.Nil(t, err)
-	assert.Equal(t, 3, len(receipts))
+	assert.Equal(t, 3, len(receipts.MustLoad()))
 
 	// not found
 	receipts, err = store.GetBlockReceiptsByNumber(2)
 	assert.Nil(t, err)
-	assert.Nil(t, receipts)
+	assert.Nil(t, receipts.MustLoad())
 }

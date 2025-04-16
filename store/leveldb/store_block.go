@@ -3,13 +3,14 @@ package leveldb
 import (
 	"encoding/binary"
 
+	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/openweb3/web3go/types"
+	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func (store *Store) writeBlock(batch *leveldb.Batch, block *types.Block) {
+func (store *Store) writeBlock(batch *leveldb.Batch, block *ethTypes.Block) {
 	// block hash -> block number
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], block.Number.Uint64())
@@ -39,27 +40,27 @@ func (store *Store) getBlockNumberByHash(hash common.Hash) (uint64, bool, error)
 }
 
 // GetBlockByHash returns block for the given block hash. If not found, returns nil.
-func (store *Store) GetBlockByHash(hash common.Hash) (*types.Block, error) {
+func (store *Store) GetBlockByHash(hash common.Hash) (types.Lazy[*ethTypes.Block], error) {
 	number, ok, err := store.getBlockNumberByHash(hash)
 	if err != nil || !ok {
-		return nil, err
+		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
 	return store.GetBlockByNumber(number)
 }
 
 // GetBlockByNumber returns block for the given block number. If not found, returns nil.
-func (store *Store) GetBlockByNumber(number uint64) (*types.Block, error) {
+func (store *Store) GetBlockByNumber(number uint64) (types.Lazy[*ethTypes.Block], error) {
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], number)
 
-	var block types.Block
+	var block types.Lazy[*ethTypes.Block]
 	ok, err := store.readJson(store.keyBlockNumber2BlockPool, blockNumberBuf[:], &block)
 	if err != nil || !ok {
-		return nil, err
+		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
-	return &block, nil
+	return block, nil
 }
 
 // GetBlockTransactionCountByHash returns the transaction count for the given block hash.

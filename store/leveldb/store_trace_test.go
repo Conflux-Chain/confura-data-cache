@@ -41,13 +41,13 @@ func TestStoreGetBlockTraces(t *testing.T) {
 
 	traces, err := store.GetBlockTracesByHash(common.HexToHash("0x6660"))
 	assert.Nil(t, err)
-	assert.NotNil(t, traces)
-	assert.Equal(t, 0, len(traces))
+	assert.NotNil(t, traces.MustLoad())
+	assert.Equal(t, 0, len(traces.MustLoad()))
 
 	traces, err = store.GetBlockTracesByNumber(0)
 	assert.Nil(t, err)
-	assert.NotNil(t, traces)
-	assert.Equal(t, 0, len(traces))
+	assert.NotNil(t, traces.MustLoad())
+	assert.Equal(t, 0, len(traces.MustLoad()))
 
 	// write block 1 with txs
 	store.Write(createTestEthData(1, common.HexToHash("0x6661"),
@@ -58,14 +58,14 @@ func TestStoreGetBlockTraces(t *testing.T) {
 
 	traces, err = store.GetBlockTracesByHash(common.HexToHash("0x6661"))
 	assert.Nil(t, err)
-	assert.Equal(t, 3, len(traces))
+	assert.Equal(t, 3, len(traces.MustLoad()))
 
 	traces, err = store.GetBlockTracesByNumber(1)
 	assert.Nil(t, err)
-	assert.Equal(t, 3, len(traces))
+	assert.Equal(t, 3, len(traces.MustLoad()))
 
 	// not found
 	traces, err = store.GetBlockTracesByNumber(2)
 	assert.Nil(t, err)
-	assert.Nil(t, traces)
+	assert.Nil(t, traces.MustLoad())
 }

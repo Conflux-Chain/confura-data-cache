@@ -65,7 +65,7 @@ func (store *Store) GetTransactionByBlockNumberAndIndex(blockNumber uint64, txIn
 		return nil, errors.WithMessagef(err, "Failed to get block by number %v", blockNumber)
 	}
 
-	txs := block.Transactions.Transactions()
+	txs := block.MustLoad().Transactions.Transactions()
 
 	if int(txIndex) >= len(txs) {
 		return nil, nil
