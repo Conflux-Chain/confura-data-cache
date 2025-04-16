@@ -52,7 +52,7 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 
 	// check if exceeds max memory
 	dataSize := data.Size()
-	for c.end-c.start > 1 && c.currentSize+dataSize > c.config.MaxMemory {
+	for c.end-c.start > 0 && c.currentSize+dataSize > c.config.MaxMemory {
 		c.evict()
 	}
 
