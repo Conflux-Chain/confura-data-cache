@@ -28,13 +28,18 @@ func (store *Store) GetTransactionTraces(txHash common.Hash) ([]ethTypes.Localiz
 		return nil, err
 	}
 
-	blockTraces, err := store.GetBlockTracesByNumber(blockNumber)
+	blockTracesLazy, err := store.GetBlockTracesByNumber(blockNumber)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "Failed to get block traces by number %v", blockNumber)
 	}
 
+	blockTraces, err := blockTracesLazy.Load()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to unmarshal block traces")
+	}
+
 	var txTraces []ethTypes.LocalizedTrace
-	for _, trace := range blockTraces.MustLoad() {
+	for _, trace := range blockTraces {
 		if trace.TransactionPosition != nil && *trace.TransactionPosition == uint(txIndex) {
 			txTraces = append(txTraces, trace)
 		}

@@ -33,7 +33,11 @@ func (store *Store) GetTransactionReceipt(txHash common.Hash) (*ethTypes.Receipt
 		return nil, errors.WithMessagef(err, "Failed to get block receipts by number %v", blockNumber)
 	}
 
-	receipts := receiptsLazy.MustLoad()
+	receipts, err := receiptsLazy.Load()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to unmarshal receipts")
+	}
+
 	if int(txIndex) >= len(receipts) {
 		return nil, errors.Errorf("Data corrupted, invalid transaction index %v of length %v", txIndex, len(receipts))
 	}
