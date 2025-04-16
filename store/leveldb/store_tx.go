@@ -60,9 +60,14 @@ func (store *Store) GetTransactionByBlockHashAndIndex(blockHash common.Hash, txI
 
 // GetTransactionByBlockNumberAndIndex returns transaction for the given block number and transaction index. If not found, returns nil.
 func (store *Store) GetTransactionByBlockNumberAndIndex(blockNumber uint64, txIndex uint32) (*types.TransactionDetail, error) {
-	block, err := store.GetBlockByNumber(blockNumber)
+	blockLazy, err := store.GetBlockByNumber(blockNumber)
 	if err != nil {
 		return nil, errors.WithMessagef(err, "Failed to get block by number %v", blockNumber)
+	}
+
+	block, err := blockLazy.Load()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to unmarshal block")
 	}
 
 	txs := block.Transactions.Transactions()

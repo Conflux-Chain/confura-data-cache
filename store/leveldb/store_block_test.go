@@ -17,33 +17,33 @@ func TestStoreGetBlock(t *testing.T) {
 	// get block 0
 	data, err := store.GetBlockByHash(common.HexToHash("0x6660"))
 	assert.Nil(t, err)
-	assert.Equal(t, uint64(0), data.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x6660"), data.Hash)
+	assert.Equal(t, uint64(0), data.MustLoad().Number.Uint64())
+	assert.Equal(t, common.HexToHash("0x6660"), data.MustLoad().Hash)
 
 	data, err = store.GetBlockByNumber(0)
 	assert.Nil(t, err)
-	assert.Equal(t, uint64(0), data.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x6660"), data.Hash)
+	assert.Equal(t, uint64(0), data.MustLoad().Number.Uint64())
+	assert.Equal(t, common.HexToHash("0x6660"), data.MustLoad().Hash)
 
 	// get block 1
 	data, err = store.GetBlockByHash(common.HexToHash("0x6661"))
 	assert.Nil(t, err)
-	assert.Equal(t, uint64(1), data.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x6661"), data.Hash)
+	assert.Equal(t, uint64(1), data.MustLoad().Number.Uint64())
+	assert.Equal(t, common.HexToHash("0x6661"), data.MustLoad().Hash)
 
 	data, err = store.GetBlockByNumber(1)
 	assert.Nil(t, err)
-	assert.Equal(t, uint64(1), data.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x6661"), data.Hash)
+	assert.Equal(t, uint64(1), data.MustLoad().Number.Uint64())
+	assert.Equal(t, common.HexToHash("0x6661"), data.MustLoad().Hash)
 
 	// get block 2 - not found
 	data, err = store.GetBlockByHash(common.HexToHash("0x6662"))
 	assert.Nil(t, err)
-	assert.Nil(t, data)
+	assert.Nil(t, data.MustLoad())
 
 	data, err = store.GetBlockByNumber(2)
 	assert.Nil(t, err)
-	assert.Nil(t, data)
+	assert.Nil(t, data.MustLoad())
 }
 
 func TestStoreGetBlockTransactionCount(t *testing.T) {
