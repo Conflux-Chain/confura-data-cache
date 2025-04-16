@@ -4,6 +4,7 @@ go 1.22
 
 require (
 	github.com/Conflux-Chain/go-conflux-util v0.2.2-0.20250114102326-5a181f74ec59
+	github.com/DmitriyVTitov/size v1.5.0
 	github.com/ethereum/go-ethereum v1.14.5
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/openweb3/go-rpc-provider v0.3.3
