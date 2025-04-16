@@ -81,7 +81,7 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 	return nil
 }
 
-// evict always remove the earliest block data.
+// pop always remove the earliest block data.
 func (c *EthCache) evict() {
 	if c.start >= c.end {
 		c.resetPosition()
