@@ -3,7 +3,9 @@ package nearhead
 import (
 	"encoding/json"
 	"math/big"
+	"math/rand"
 	"testing"
+	"time"
 	"unsafe"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
@@ -109,7 +111,13 @@ func TestEthCache_Put(t *testing.T) {
 	}
 	assert.ErrorContains(t, cache.Put(data), "Block data not cached in sequence")
 
-	// pop one block
+	// evict one block
+	cache.evict()
+	assert.Equal(t, cache.start, uint64(120177556))
+	assert.Equal(t, cache.end, uint64(120177556))
+	assert.Equal(t, cache.currentSize, uint64(0))
+
+	// evict one block that not exists
 	cache.evict()
 	assert.Equal(t, cache.start, uint64(120177556))
 	assert.Equal(t, cache.end, uint64(120177556))
@@ -126,13 +134,31 @@ func TestEthCache_Put(t *testing.T) {
 	assert.Greater(t, cache.currentSize, uint64(0))
 	assert.Less(t, cache.currentSize, cache.config.MaxMemory)
 
-	// pop multi block
+	// evict multi block
 	for i := 0; i < batchBlocks; i++ {
 		cache.evict()
 	}
 	assert.Equal(t, cache.start, uint64(120177555+batchBlocks))
 	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
 	assert.Equal(t, cache.currentSize, uint64(0))
+
+	// add multi blocks includes a large block whose size exceeds max memory
+	cache = createTestCache()
+	batchBlocks = 3
+	datas = createTestDataBatch(t, batchBlocks)
+
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	txInput := make([]byte, cache.config.MaxMemory)
+	n, err := r.Read(txInput)
+	assert.NoError(t, err)
+	assert.Equal(t, n, len(txInput))
+
+	datas[batchBlocks-1].Block.Transactions.Transactions()[0].Input = txInput
+	for _, data := range datas {
+		assert.Nil(t, cache.Put(&data))
+	}
+	assert.Equal(t, cache.end-cache.start, uint64(1))
+	assert.Greater(t, cache.currentSize, cache.config.MaxMemory)
 }
 
 func TestEthCache_GetBlockByHash(t *testing.T) {
