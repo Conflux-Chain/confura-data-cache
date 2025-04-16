@@ -117,8 +117,8 @@ func TestEthCache_Put(t *testing.T) {
 	assert.Equal(t, cache.end, uint64(120177556))
 	assert.Equal(t, cache.currentSize, uint64(0))
 
-	// evict one block that not exists
-	cache.evict()
+	// del one block that not exists
+	cache.del(120177556)
 	assert.Equal(t, cache.start, uint64(120177556))
 	assert.Equal(t, cache.end, uint64(120177556))
 	assert.Equal(t, cache.currentSize, uint64(0))
@@ -159,6 +159,47 @@ func TestEthCache_Put(t *testing.T) {
 	}
 	assert.Equal(t, cache.end-cache.start, uint64(1))
 	assert.Greater(t, cache.currentSize, cache.config.MaxMemory)
+}
+
+func TestEthCache_Pop(t *testing.T) {
+	cache := createTestCache()
+	batchBlocks := 10
+	datas := createTestDataBatch(t, batchBlocks)
+	for _, data := range datas {
+		assert.Nil(t, cache.Put(&data))
+	}
+	assert.Equal(t, cache.start, uint64(120177555))
+	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
+	assert.Greater(t, cache.currentSize, uint64(0))
+	assert.Less(t, cache.currentSize, cache.config.MaxMemory)
+
+	// pop one block that not exists
+	block := cache.Pop(uint64(120177555 + batchBlocks))
+	assert.Nil(t, block)
+	assert.Equal(t, cache.start, uint64(120177555))
+	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
+	assert.Greater(t, cache.currentSize, uint64(0))
+
+	// pop one block
+	block = cache.Pop(uint64(120177555 + batchBlocks - 1))
+	assert.Equal(t, *block, uint64(120177555+batchBlocks-1))
+	assert.Equal(t, cache.start, uint64(120177555))
+	assert.Equal(t, cache.end, uint64(120177555+batchBlocks-1))
+	assert.Greater(t, cache.currentSize, uint64(0))
+
+	// pop two blocks
+	block = cache.Pop(uint64(120177555 + batchBlocks - 3))
+	assert.Equal(t, *block, uint64(120177555+batchBlocks-3))
+	assert.Equal(t, cache.start, uint64(120177555))
+	assert.Equal(t, cache.end, uint64(120177555+batchBlocks-3))
+	assert.Greater(t, cache.currentSize, uint64(0))
+
+	// pop all
+	block = cache.Pop(120177555)
+	assert.Equal(t, *block, uint64(120177555))
+	assert.Equal(t, cache.start, uint64(120177555))
+	assert.Equal(t, cache.end, uint64(120177555))
+	assert.Equal(t, cache.currentSize, uint64(0))
 }
 
 func TestEthCache_GetBlockByHash(t *testing.T) {
