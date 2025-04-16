@@ -4,7 +4,6 @@ import (
 	"sync"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
-	"github.com/DmitriyVTitov/size"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -12,7 +11,7 @@ import (
 
 // Config is cache configurations
 type Config struct {
-	MaxMemory uint64 `default:"104857600"` // 100MG
+	MaxMemory uint64 `default:"104857600"` // 100MB
 }
 
 // EthCache is used to cache near head data
@@ -47,21 +46,18 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 
 	// check block number in sequence
 	bn := data.Block.Number.Uint64()
-	if c.end > 0 && c.end != bn {
+	if c.end > c.start && c.end != bn {
 		return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", c.end, bn)
 	}
 
 	// check if exceeds max memory
-	dataSize := uint64(size.Of(data))
-	if dataSize > c.config.MaxMemory {
-		return errors.Errorf("Block data exceeds max memory, bn = %v, size = %v, max = %v", bn, dataSize, c.config.MaxMemory)
-	}
+	dataSize := data.Size()
 	for c.currentSize+dataSize > c.config.MaxMemory {
 		c.evict()
 	}
 
 	// push data
-	if c.start == uint64(0) {
+	if c.start == c.end {
 		c.start = bn
 	}
 	c.end = bn + uint64(1)
@@ -83,8 +79,8 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 
 // evict always remove the earliest block data.
 func (c *EthCache) evict() {
-	if c.start >= c.end {
-		c.resetPosition()
+	// keep at least one block data
+	if c.end-c.start <= 1 {
 		return
 	}
 
@@ -108,14 +104,6 @@ func (c *EthCache) evict() {
 	delete(c.blockNumber2BlockSize, bn)
 
 	c.start += 1
-	if c.start >= c.end {
-		c.resetPosition()
-	}
-}
-
-func (c *EthCache) resetPosition() {
-	c.start = uint64(0)
-	c.end = uint64(0)
 }
 
 // GetBlockByNumber returns block with given number.

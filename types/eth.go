@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/DmitriyVTitov/size"
 	"github.com/openweb3/web3go"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -11,6 +12,10 @@ type EthBlockData struct {
 	Block    *types.Block
 	Receipts []types.Receipt
 	Traces   []types.LocalizedTrace
+}
+
+func (data *EthBlockData) Size() uint64 {
+	return uint64(size.Of(data))
 }
 
 func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData, error) {
