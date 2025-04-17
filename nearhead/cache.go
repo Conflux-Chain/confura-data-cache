@@ -2,6 +2,7 @@ package nearhead
 
 import (
 	"sync"
+	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -14,8 +15,104 @@ type Config struct {
 	MaxMemory uint64 `default:"104857600"` // 100MB
 }
 
-// EthCache is used to cache near head data
 type EthCache struct {
+	cache   *ethCache
+	metrics Metrics
+}
+
+func NewEthCache(config Config) *EthCache {
+	return &EthCache{
+		cache: &ethCache{
+			config:                 config,
+			blockNumber2BlockDatas: make(map[uint64]*types.EthBlockData),
+			blockHash2BlockNumbers: make(map[common.Hash]uint64),           // mapping from block hash to number, for query by block hash
+			txHash2TxIndexes:       make(map[common.Hash]TransactionIndex), // mapping from tx hash to block number and tx index, for query by tx hash
+			blockNumber2BlockSize:  make(map[uint64]uint64),                // mapping from block number to block data size
+		},
+	}
+}
+
+func (c *EthCache) Put(data *types.EthBlockData) error {
+	start := time.Now()
+	if err := c.cache.Put(data); err != nil {
+		return err
+	}
+
+	c.metrics.Latest().Update(data.Block.Number.Int64())
+	c.metrics.CurrentSize().Update(int64(c.cache.currentSize))
+	c.metrics.Put().UpdateSince(start)
+
+	return nil
+}
+
+func (c *EthCache) Pop(blockNumber uint64) bool {
+	return c.cache.Pop(blockNumber)
+}
+
+func (c *EthCache) GetBlockByNumber(blockNumber uint64, isFull bool) *ethTypes.Block {
+	block := c.cache.GetBlockByNumber(blockNumber, isFull)
+	c.metrics.Hit("getBlockByNumber").Mark(block != nil)
+	return block
+}
+
+// GetBlockByHash returns block with given block hash.
+func (c *EthCache) GetBlockByHash(blockHash common.Hash, isFull bool) *ethTypes.Block {
+	block := c.cache.GetBlockByHash(blockHash, isFull)
+	c.metrics.Hit("getBlockByHash").Mark(block != nil)
+	return block
+}
+
+// GetTransactionByHash returns transaction with given transaction hash.
+func (c *EthCache) GetTransactionByHash(txHash common.Hash) *ethTypes.TransactionDetail {
+	tx := c.cache.GetTransactionByHash(txHash)
+	c.metrics.Hit("getTransactionByHash").Mark(tx != nil)
+	return tx
+}
+
+// GetBlockReceiptsByHash returns the receipts of a given block hash.
+func (c *EthCache) GetBlockReceiptsByHash(blockHash common.Hash) []ethTypes.Receipt {
+	receipts := c.cache.GetBlockReceiptsByHash(blockHash)
+	c.metrics.Hit("getBlockReceiptsByHash").Mark(receipts != nil)
+	return receipts
+}
+
+// GetBlockReceiptsByNumber returns the receipts of a given block number.
+func (c *EthCache) GetBlockReceiptsByNumber(blockNumber uint64) []ethTypes.Receipt {
+	receipts := c.cache.GetBlockReceiptsByNumber(blockNumber)
+	c.metrics.Hit("getBlockReceiptsByNumber").Mark(receipts != nil)
+	return receipts
+}
+
+// GetTransactionReceipt returns transaction receipt by transaction hash.
+func (c *EthCache) GetTransactionReceipt(txHash common.Hash) *ethTypes.Receipt {
+	receipt := c.cache.GetTransactionReceipt(txHash)
+	c.metrics.Hit("getTransactionReceipt").Mark(receipt != nil)
+	return receipt
+}
+
+// GetBlockTracesByHash returns all traces produced at given block by hash
+func (c *EthCache) GetBlockTracesByHash(blockHash common.Hash) []ethTypes.LocalizedTrace {
+	traces := c.cache.GetBlockTracesByHash(blockHash)
+	c.metrics.Hit("GetBlockTracesByHash").Mark(traces != nil)
+	return traces
+}
+
+// GetBlockTracesByNumber returns all traces produced at given block by number
+func (c *EthCache) GetBlockTracesByNumber(blockNumber uint64) []ethTypes.LocalizedTrace {
+	traces := c.cache.GetBlockTracesByNumber(blockNumber)
+	c.metrics.Hit("getBlockTracesByNumber").Mark(traces != nil)
+	return traces
+}
+
+// GetTransactionTraces returns all traces of given transaction.
+func (c *EthCache) GetTransactionTraces(txHash common.Hash) []ethTypes.LocalizedTrace {
+	traces := c.cache.GetTransactionTraces(txHash)
+	c.metrics.Hit("getTransactionTraces").Mark(traces != nil)
+	return traces
+}
+
+// EthCache is used to cache near head data
+type ethCache struct {
 	config  Config
 	rwMutex sync.RWMutex
 
@@ -29,18 +126,8 @@ type EthCache struct {
 	blockNumber2BlockSize map[uint64]uint64
 }
 
-func NewEthCache(config Config) *EthCache {
-	return &EthCache{
-		config:                 config,
-		blockNumber2BlockDatas: make(map[uint64]*types.EthBlockData),
-		blockHash2BlockNumbers: make(map[common.Hash]uint64),           // mapping from block hash to number, for query by block hash
-		txHash2TxIndexes:       make(map[common.Hash]TransactionIndex), // mapping from tx hash to block number and tx index, for query by tx hash
-		blockNumber2BlockSize:  make(map[uint64]uint64),                // mapping from block number to block data size
-	}
-}
-
 // Put is used to add near head data to memory cache
-func (c *EthCache) Put(data *types.EthBlockData) error {
+func (c *ethCache) Put(data *types.EthBlockData) error {
 	c.rwMutex.Lock()
 	defer c.rwMutex.Unlock()
 
@@ -79,7 +166,7 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 
 // Pop clears all blockdata after block number(includes)
 // If pop succeeds, returns true, otherwise, returns false
-func (c *EthCache) Pop(blockNumber uint64) bool {
+func (c *ethCache) Pop(blockNumber uint64) bool {
 	c.rwMutex.Lock()
 	defer c.rwMutex.Unlock()
 
@@ -96,13 +183,13 @@ func (c *EthCache) Pop(blockNumber uint64) bool {
 }
 
 // evict always remove the earliest block data.
-func (c *EthCache) evict() {
+func (c *ethCache) evict() {
 	bn := c.start
 	c.del(bn)
 	c.start += 1
 }
 
-func (c *EthCache) del(bn uint64) {
+func (c *ethCache) del(bn uint64) {
 	data, exists := c.blockNumber2BlockDatas[bn]
 	if !exists {
 		return
@@ -123,7 +210,7 @@ func (c *EthCache) del(bn uint64) {
 }
 
 // GetBlockByNumber returns block with given number.
-func (c *EthCache) GetBlockByNumber(blockNumber uint64, isFull bool) *ethTypes.Block {
+func (c *ethCache) GetBlockByNumber(blockNumber uint64, isFull bool) *ethTypes.Block {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -149,7 +236,7 @@ func (c *EthCache) GetBlockByNumber(blockNumber uint64, isFull bool) *ethTypes.B
 }
 
 // GetBlockByHash returns block with given block hash.
-func (c *EthCache) GetBlockByHash(blockHash common.Hash, isFull bool) *ethTypes.Block {
+func (c *ethCache) GetBlockByHash(blockHash common.Hash, isFull bool) *ethTypes.Block {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -162,7 +249,7 @@ func (c *EthCache) GetBlockByHash(blockHash common.Hash, isFull bool) *ethTypes.
 }
 
 // GetTransactionByHash returns transaction with given transaction hash.
-func (c *EthCache) GetTransactionByHash(txHash common.Hash) *ethTypes.TransactionDetail {
+func (c *ethCache) GetTransactionByHash(txHash common.Hash) *ethTypes.TransactionDetail {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -181,7 +268,7 @@ func (c *EthCache) GetTransactionByHash(txHash common.Hash) *ethTypes.Transactio
 }
 
 // GetBlockReceiptsByHash returns the receipts of a given block hash.
-func (c *EthCache) GetBlockReceiptsByHash(blockHash common.Hash) []ethTypes.Receipt {
+func (c *ethCache) GetBlockReceiptsByHash(blockHash common.Hash) []ethTypes.Receipt {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -194,7 +281,7 @@ func (c *EthCache) GetBlockReceiptsByHash(blockHash common.Hash) []ethTypes.Rece
 }
 
 // GetBlockReceiptsByNumber returns the receipts of a given block number.
-func (c *EthCache) GetBlockReceiptsByNumber(blockNumber uint64) []ethTypes.Receipt {
+func (c *ethCache) GetBlockReceiptsByNumber(blockNumber uint64) []ethTypes.Receipt {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -207,7 +294,7 @@ func (c *EthCache) GetBlockReceiptsByNumber(blockNumber uint64) []ethTypes.Recei
 }
 
 // GetTransactionReceipt returns transaction receipt by transaction hash.
-func (c *EthCache) GetTransactionReceipt(txHash common.Hash) *ethTypes.Receipt {
+func (c *ethCache) GetTransactionReceipt(txHash common.Hash) *ethTypes.Receipt {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -226,7 +313,7 @@ func (c *EthCache) GetTransactionReceipt(txHash common.Hash) *ethTypes.Receipt {
 }
 
 // GetBlockTracesByHash returns all traces produced at given block by hash
-func (c *EthCache) GetBlockTracesByHash(blockHash common.Hash) []ethTypes.LocalizedTrace {
+func (c *ethCache) GetBlockTracesByHash(blockHash common.Hash) []ethTypes.LocalizedTrace {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -239,7 +326,7 @@ func (c *EthCache) GetBlockTracesByHash(blockHash common.Hash) []ethTypes.Locali
 }
 
 // GetBlockTracesByNumber returns all traces produced at given block by number
-func (c *EthCache) GetBlockTracesByNumber(blockNumber uint64) []ethTypes.LocalizedTrace {
+func (c *ethCache) GetBlockTracesByNumber(blockNumber uint64) []ethTypes.LocalizedTrace {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
@@ -252,7 +339,7 @@ func (c *EthCache) GetBlockTracesByNumber(blockNumber uint64) []ethTypes.Localiz
 }
 
 // GetTransactionTraces returns all traces of given transaction.
-func (c *EthCache) GetTransactionTraces(txHash common.Hash) []ethTypes.LocalizedTrace {
+func (c *ethCache) GetTransactionTraces(txHash common.Hash) []ethTypes.LocalizedTrace {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 

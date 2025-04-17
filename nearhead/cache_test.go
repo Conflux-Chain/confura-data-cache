@@ -95,12 +95,12 @@ func incrHash(hash common.Hash, val ...int64) common.Hash {
 
 func TestEthCache_Put(t *testing.T) {
 	// add one block
-	cache := createTestCache()
+	c := createTestCache()
 	data := createTestData(t)
-	assert.Nil(t, cache.Put(data))
-	assert.Equal(t, cache.start, uint64(120177555))
-	assert.Equal(t, cache.end, uint64(120177556))
-	assert.Equal(t, cache.currentSize, data.Size())
+	assert.Nil(t, c.Put(data))
+	assert.Equal(t, c.cache.start, uint64(120177555))
+	assert.Equal(t, c.cache.end, uint64(120177556))
+	assert.Equal(t, c.cache.currentSize, data.Size())
 
 	// not cached in sequence
 	data2 := createTestData(t)
@@ -109,97 +109,97 @@ func TestEthCache_Put(t *testing.T) {
 	for _, tx := range data2.Block.Transactions.Transactions() {
 		tx.Hash = incrHash(tx.Hash, int64(2))
 	}
-	assert.ErrorContains(t, cache.Put(data), "Block data not cached in sequence")
+	assert.ErrorContains(t, c.Put(data), "Block data not cached in sequence")
 
 	// evict one block
-	cache.evict()
-	assert.Equal(t, cache.start, uint64(120177556))
-	assert.Equal(t, cache.end, uint64(120177556))
-	assert.Equal(t, cache.currentSize, uint64(0))
+	c.cache.evict()
+	assert.Equal(t, c.cache.start, uint64(120177556))
+	assert.Equal(t, c.cache.end, uint64(120177556))
+	assert.Equal(t, c.cache.currentSize, uint64(0))
 
 	// del one block that not exists
-	cache.del(120177556)
-	assert.Equal(t, cache.start, uint64(120177556))
-	assert.Equal(t, cache.end, uint64(120177556))
-	assert.Equal(t, cache.currentSize, uint64(0))
+	c.cache.del(120177556)
+	assert.Equal(t, c.cache.start, uint64(120177556))
+	assert.Equal(t, c.cache.end, uint64(120177556))
+	assert.Equal(t, c.cache.currentSize, uint64(0))
 
 	// add multi blocks
-	cache = createTestCache()
+	c = createTestCache()
 	batchBlocks := 100
 	datas := createTestDataBatch(t, batchBlocks)
 	for _, data := range datas {
-		assert.Nil(t, cache.Put(&data))
+		assert.Nil(t, c.Put(&data))
 	}
-	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
-	assert.Greater(t, cache.currentSize, uint64(0))
-	assert.Less(t, cache.currentSize, cache.config.MaxMemory)
+	assert.Equal(t, c.cache.end, uint64(120177555+batchBlocks))
+	assert.Greater(t, c.cache.currentSize, uint64(0))
+	assert.Less(t, c.cache.currentSize, c.cache.config.MaxMemory)
 
 	// evict multi block
 	for i := 0; i < batchBlocks; i++ {
-		cache.evict()
+		c.cache.evict()
 	}
-	assert.Equal(t, cache.start, uint64(120177555+batchBlocks))
-	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
-	assert.Equal(t, cache.currentSize, uint64(0))
+	assert.Equal(t, c.cache.start, uint64(120177555+batchBlocks))
+	assert.Equal(t, c.cache.end, uint64(120177555+batchBlocks))
+	assert.Equal(t, c.cache.currentSize, uint64(0))
 
 	// add multi blocks includes a large block whose size exceeds max memory
-	cache = createTestCache()
+	c = createTestCache()
 	batchBlocks = 3
 	datas = createTestDataBatch(t, batchBlocks)
 
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	txInput := make([]byte, cache.config.MaxMemory)
+	txInput := make([]byte, c.cache.config.MaxMemory)
 	n, err := r.Read(txInput)
 	assert.NoError(t, err)
 	assert.Equal(t, n, len(txInput))
 
 	datas[batchBlocks-1].Block.Transactions.Transactions()[0].Input = txInput
 	for _, data := range datas {
-		assert.Nil(t, cache.Put(&data))
+		assert.Nil(t, c.Put(&data))
 	}
-	assert.Equal(t, cache.end-cache.start, uint64(1))
-	assert.Greater(t, cache.currentSize, cache.config.MaxMemory)
+	assert.Equal(t, c.cache.end-c.cache.start, uint64(1))
+	assert.Greater(t, c.cache.currentSize, c.cache.config.MaxMemory)
 }
 
 func TestEthCache_Pop(t *testing.T) {
-	cache := createTestCache()
+	c := createTestCache()
 	batchBlocks := 10
 	datas := createTestDataBatch(t, batchBlocks)
 	for _, data := range datas {
-		assert.Nil(t, cache.Put(&data))
+		assert.Nil(t, c.Put(&data))
 	}
-	assert.Equal(t, cache.start, uint64(120177555))
-	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
-	assert.Greater(t, cache.currentSize, uint64(0))
-	assert.Less(t, cache.currentSize, cache.config.MaxMemory)
+	assert.Equal(t, c.cache.start, uint64(120177555))
+	assert.Equal(t, c.cache.end, uint64(120177555+batchBlocks))
+	assert.Greater(t, c.cache.currentSize, uint64(0))
+	assert.Less(t, c.cache.currentSize, c.cache.config.MaxMemory)
 
 	// pop one block that not exists
-	ok := cache.Pop(uint64(120177555 + batchBlocks))
+	ok := c.Pop(uint64(120177555 + batchBlocks))
 	assert.False(t, ok)
-	assert.Equal(t, cache.start, uint64(120177555))
-	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
-	assert.Greater(t, cache.currentSize, uint64(0))
+	assert.Equal(t, c.cache.start, uint64(120177555))
+	assert.Equal(t, c.cache.end, uint64(120177555+batchBlocks))
+	assert.Greater(t, c.cache.currentSize, uint64(0))
 
 	// pop one block
-	ok = cache.Pop(uint64(120177555 + batchBlocks - 1))
+	ok = c.Pop(uint64(120177555 + batchBlocks - 1))
 	assert.True(t, ok)
-	assert.Equal(t, cache.start, uint64(120177555))
-	assert.Equal(t, cache.end, uint64(120177555+batchBlocks-1))
-	assert.Greater(t, cache.currentSize, uint64(0))
+	assert.Equal(t, c.cache.start, uint64(120177555))
+	assert.Equal(t, c.cache.end, uint64(120177555+batchBlocks-1))
+	assert.Greater(t, c.cache.currentSize, uint64(0))
 
 	// pop two blocks
-	ok = cache.Pop(uint64(120177555 + batchBlocks - 3))
+	ok = c.Pop(uint64(120177555 + batchBlocks - 3))
 	assert.True(t, ok)
-	assert.Equal(t, cache.start, uint64(120177555))
-	assert.Equal(t, cache.end, uint64(120177555+batchBlocks-3))
-	assert.Greater(t, cache.currentSize, uint64(0))
+	assert.Equal(t, c.cache.start, uint64(120177555))
+	assert.Equal(t, c.cache.end, uint64(120177555+batchBlocks-3))
+	assert.Greater(t, c.cache.currentSize, uint64(0))
 
 	// pop all
-	ok = cache.Pop(120177555)
+	ok = c.Pop(120177555)
 	assert.True(t, ok)
-	assert.Equal(t, cache.start, uint64(120177555))
-	assert.Equal(t, cache.end, uint64(120177555))
-	assert.Equal(t, cache.currentSize, uint64(0))
+	assert.Equal(t, c.cache.start, uint64(120177555))
+	assert.Equal(t, c.cache.end, uint64(120177555))
+	assert.Equal(t, c.cache.currentSize, uint64(0))
 }
 
 func TestEthCache_GetBlockByHash(t *testing.T) {
