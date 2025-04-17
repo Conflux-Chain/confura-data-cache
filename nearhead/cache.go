@@ -78,13 +78,13 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 }
 
 // Pop clears all blockdata after block number(includes)
-// If pop succeeds, returns block number, otherwise, returns nil
-func (c *EthCache) Pop(blockNumber uint64) *uint64 {
+// If pop succeeds, returns true, otherwise, returns false
+func (c *EthCache) Pop(blockNumber uint64) bool {
 	c.rwMutex.Lock()
 	defer c.rwMutex.Unlock()
 
 	if c.start == c.end || blockNumber < c.start || blockNumber >= c.end {
-		return nil
+		return false
 	}
 
 	for bn := c.end - 1; bn >= blockNumber; bn-- {
@@ -92,7 +92,7 @@ func (c *EthCache) Pop(blockNumber uint64) *uint64 {
 	}
 	c.end = blockNumber
 
-	return &blockNumber
+	return true
 }
 
 // evict always remove the earliest block data.
