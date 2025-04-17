@@ -77,9 +77,32 @@ func (c *EthCache) Put(data *types.EthBlockData) error {
 	return nil
 }
 
+// Pop clears all blockdata after block number(includes)
+// If pop succeeds, returns true, otherwise, returns false
+func (c *EthCache) Pop(blockNumber uint64) bool {
+	c.rwMutex.Lock()
+	defer c.rwMutex.Unlock()
+
+	if c.start == c.end || blockNumber < c.start || blockNumber >= c.end {
+		return false
+	}
+
+	for bn := c.end - 1; bn >= blockNumber; bn-- {
+		c.del(bn)
+	}
+	c.end = blockNumber
+
+	return true
+}
+
 // evict always remove the earliest block data.
 func (c *EthCache) evict() {
 	bn := c.start
+	c.del(bn)
+	c.start += 1
+}
+
+func (c *EthCache) del(bn uint64) {
 	data, exists := c.blockNumber2BlockDatas[bn]
 	if !exists {
 		return
@@ -97,8 +120,6 @@ func (c *EthCache) evict() {
 	dataSize := c.blockNumber2BlockSize[bn]
 	c.currentSize = c.currentSize - dataSize
 	delete(c.blockNumber2BlockSize, bn)
-
-	c.start += 1
 }
 
 // GetBlockByNumber returns block with given number.
