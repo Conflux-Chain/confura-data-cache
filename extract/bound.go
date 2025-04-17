@@ -104,7 +104,7 @@ func (m *MemoryBoundedChannel[T]) tryReserve(size uint64) bool {
 
 // release decrements memory usage after receiving an item.
 func (m *MemoryBoundedChannel[T]) release(size uint64) {
-	m.used.Add(^uint64(size - 1))
+	m.used.Add(^uint64(size - 1)) // equivalent to: used -= t.Size()
 }
 
 type EthMemoryBoundedChannel = MemoryBoundedChannel[*types.EthBlockData]
