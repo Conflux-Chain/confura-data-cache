@@ -3,6 +3,8 @@ package nearhead
 import (
 	"sync"
 
+	mapset "github.com/deckarep/golang-set/v2"
+
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
@@ -276,7 +278,96 @@ func (c *EthCache) GetTransactionTraces(txHash common.Hash) []ethTypes.Localized
 	return traces
 }
 
+// GetLogs returns logs matching given filter object.
+func (c *EthCache) GetLogs(logFilter FilterQuery) []ethTypes.Log {
+	if c.start == c.end {
+		return nil
+	}
+
+	// if blockHash is present in the filter criteria, neither fromBlock nor toBlock is allowed
+	if logFilter.BlockHash != nil && (logFilter.FromBlock != nil || logFilter.ToBlock != nil) {
+		return nil
+	}
+
+	// contract address filter
+	addresses := mapset.NewSet(logFilter.Addresses...)
+
+	// topic filter
+	topics := make([]mapset.Set[common.Hash], 0, 4)
+	for _, t := range logFilter.Topics {
+		topics = append(topics, mapset.NewSet(t...))
+	}
+
+	// block hash filter
+	if logFilter.BlockHash != nil {
+		bn, exist := c.blockHash2BlockNumbers[*logFilter.BlockHash]
+		if !exist {
+			return nil
+		}
+		return c.collectBlockLogs(bn, addresses, topics)
+	}
+
+	// from / to block filter
+	from := logFilter.FromBlock
+	to := logFilter.ToBlock
+	if from == nil {
+		from = &c.end
+	}
+	if to == nil {
+		to = &c.end
+	}
+	if (*from < c.start || *from >= c.end) ||
+		(*to < c.start || *to >= c.end) ||
+		(*from > *to) {
+		return nil
+	}
+
+	logs := make([]ethTypes.Log, 0)
+	for bn := *from; bn <= *to; bn++ {
+		blockLogs := c.collectBlockLogs(bn, addresses, topics)
+		logs = append(logs, blockLogs...)
+	}
+
+	return logs
+}
+
+func (c *EthCache) collectBlockLogs(blockNumber uint64, addrSet mapset.Set[common.Address],
+	topicSet []mapset.Set[common.Hash]) []ethTypes.Log {
+	logs := make([]ethTypes.Log, 0)
+
+	for _, receipt := range c.blockNumber2BlockDatas[blockNumber].Receipts {
+		for _, log := range receipt.Logs {
+			if !addrSet.IsEmpty() && !addrSet.Contains(log.Address) {
+				continue
+			}
+
+			wanted := true
+			for i, t := range log.Topics {
+				if len(topicSet) > i && !topicSet[i].IsEmpty() && !topicSet[i].Contains(t) {
+					wanted = false
+					break
+				}
+			}
+
+			if wanted {
+				logs = append(logs, *log)
+			}
+		}
+	}
+
+	return logs
+}
+
 type TransactionIndex struct {
 	blockNumber      uint64
 	transactionIndex uint64
+}
+
+// FilterQuery contains options for contract log filtering.
+type FilterQuery struct {
+	BlockHash *common.Hash
+	FromBlock *uint64
+	ToBlock   *uint64
+	Addresses []common.Address
+	Topics    [][]common.Hash
 }
