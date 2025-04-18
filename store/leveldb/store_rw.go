@@ -1,6 +1,7 @@
 package leveldb
 
 import (
+	"encoding/binary"
 	"encoding/json"
 
 	"github.com/pkg/errors"
@@ -59,4 +60,21 @@ func (store *Store) readJson(pool *KeyPool, key []byte, valuePointer any) (bool,
 	}
 
 	return true, nil
+}
+
+func (store *Store) readUint64(key []byte) (uint64, bool, error) {
+	value, err := store.db.Get(key, nil)
+	if err == dberrors.ErrNotFound {
+		return 0, false, nil
+	}
+
+	if err != nil {
+		return 0, false, err
+	}
+
+	if len(value) != 8 {
+		return 0, false, errors.Errorf("Invalid value size, expected = 8, actual = %v", len(value))
+	}
+
+	return binary.BigEndian.Uint64(value), true, nil
 }

@@ -12,11 +12,17 @@ import (
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
-var keyNextBlockNumber = []byte("nextBlockNumber")
+var (
+	keyEarlistBlockNumber = []byte("earlistBlockNumber")
+	keyNextBlockNumber    = []byte("nextBlockNumber")
+)
 
 // Store provides operations on a LevelDB database.
 type Store struct {
 	db *leveldb.DB
+
+	// earlist block number in databae, -1 indicates empty database
+	earlistBlockNumber atomic.Int64
 
 	// next block number to write in sequence
 	nextBlockNumber atomic.Uint64
@@ -63,11 +69,24 @@ func NewStore(path string, defaultNextBlockNumber ...uint64) (*Store, error) {
 		keyBlockNumber2TracesPool:         NewKeyPool("bn2ts", 8),
 	}
 
-	// init next block number to write
-	nextBlockNumber, ok, err := store.getNextBlockNumber()
+	// load the earlist block number
+	earlist, ok, err := store.readUint64(keyEarlistBlockNumber)
 	if err != nil {
 		db.Close()
-		return nil, errors.WithMessage(err, "Failed to get next block number")
+		return nil, errors.WithMessage(err, "Failed to load earlist block number in database")
+	}
+
+	if ok {
+		store.earlistBlockNumber.Store(int64(earlist))
+	} else {
+		store.earlistBlockNumber.Store(-1)
+	}
+
+	// init next block number to write
+	nextBlockNumber, ok, err := store.readUint64(keyNextBlockNumber)
+	if err != nil {
+		db.Close()
+		return nil, errors.WithMessage(err, "Failed to load next block number in database")
 	}
 
 	if ok {
@@ -79,27 +98,18 @@ func NewStore(path string, defaultNextBlockNumber ...uint64) (*Store, error) {
 	return &store, nil
 }
 
-// getNextBlockNumber returns the next block number in database.
-func (store *Store) getNextBlockNumber() (uint64, bool, error) {
-	value, err := store.db.Get(keyNextBlockNumber, nil)
-	if err == dberrors.ErrNotFound {
-		return 0, false, nil
-	}
-
-	if err != nil {
-		return 0, false, err
-	}
-
-	if len(value) != 8 {
-		return 0, false, errors.Errorf("Invalid value size, expected = 8, actual = %v", len(value))
-	}
-
-	return binary.BigEndian.Uint64(value), true, nil
-}
-
 // Close closes the underlying LevelDB database.
 func (store *Store) Close() error {
 	return store.db.Close()
+}
+
+// EarlistBlockNumber returns the earlist block number in database if any.
+func (store *Store) EarlistBlockNumber() (uint64, bool) {
+	if earlist := store.earlistBlockNumber.Load(); earlist != -1 {
+		return uint64(earlist), true
+	}
+
+	return 0, false
 }
 
 // NextBlockNumber returns the next block number to write in sequence.
@@ -130,11 +140,22 @@ func (store *Store) Write(data types.EthBlockData) error {
 	binary.BigEndian.PutUint64(nextBlockNumberBuf[:], blockNumber+1)
 	batch.Put(keyNextBlockNumber, nextBlockNumberBuf[:])
 
+	// write earlist block number for the first time
+	if store.earlistBlockNumber.Load() == -1 {
+		var earlistBlockNumberBuf [8]byte
+		binary.BigEndian.PutUint64(earlistBlockNumberBuf[:], blockNumber)
+		batch.Put(keyEarlistBlockNumber, earlistBlockNumberBuf[:])
+	}
+
 	if err := store.db.Write(batch, nil); err != nil {
 		return err
 	}
 
+	// update in-memory atomic variables
 	store.nextBlockNumber.Add(1)
+	if store.earlistBlockNumber.Load() == -1 {
+		store.earlistBlockNumber.Store(int64(blockNumber))
+	}
 
 	// add metrics
 	store.metrics.Latest().Update(int64(blockNumber))
