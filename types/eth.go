@@ -1,8 +1,6 @@
 package types
 
 import (
-	"sync/atomic"
-
 	"github.com/DmitriyVTitov/size"
 	"github.com/openweb3/web3go"
 	"github.com/openweb3/web3go/types"
@@ -14,15 +12,10 @@ type EthBlockData struct {
 	Block    *types.Block
 	Receipts []types.Receipt
 	Traces   []types.LocalizedTrace
-	size     atomic.Uint64 // cached size in bytes
 }
 
-func (d *EthBlockData) Size() (v uint64) {
-	if v = d.size.Load(); v == 0 {
-		v = uint64(size.Of(d))
-		d.size.Store(v)
-	}
-	return
+func (d *EthBlockData) Size() uint64 {
+	return uint64(size.Of(d))
 }
 
 func (d *EthBlockData) Verify() error {

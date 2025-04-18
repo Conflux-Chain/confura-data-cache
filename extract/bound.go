@@ -46,7 +46,7 @@ func (m *MemoryBoundedChannel[T]) Send(item T) {
 	for m.capacity > 0 && m.size+size > m.capacity && m.buffer.Len() > 0 {
 		m.notFullCond.Wait()
 	}
-	m.enqueue(item)
+	m.enqueue(item, size)
 }
 
 // TrySend attempts to send without blocking. Returns false if over memory limit.
@@ -58,7 +58,7 @@ func (m *MemoryBoundedChannel[T]) TrySend(item T) bool {
 	if m.capacity > 0 && m.size+size > m.capacity && m.buffer.Len() > 0 {
 		return false
 	}
-	m.enqueue(item)
+	m.enqueue(item, size)
 	return true
 }
 
@@ -92,9 +92,9 @@ func (m *MemoryBoundedChannel[T]) Len() int {
 }
 
 // enqueue adds item and updates memory.
-func (m *MemoryBoundedChannel[T]) enqueue(item T) {
+func (m *MemoryBoundedChannel[T]) enqueue(item T, size uint64) {
 	m.buffer.PushBack(item)
-	m.size += item.Size()
+	m.size += size
 
 	m.notEmptyCond.Broadcast()
 }
