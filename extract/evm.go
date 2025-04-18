@@ -64,7 +64,6 @@ func newEthFinalizedHeightProvider(c EthRpcClient) FinalizedHeightProvider {
 // - add catch-up sync to allow concurrent syncing of multiple blocks
 // - add metrics, logging and monitoring
 // - add graceful shutdown to ensure data consistency
-// - add memory threshold limit to avoid OOM
 type EthExtractor struct {
 	EthConfig
 
@@ -103,7 +102,7 @@ func NewEvmExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthE
 // It is the caller's responsibility to cancel the context when the extractor is no longer needed.
 // The dataChan is used to send the extracted data to the consumer, which should be buffered to avoid
 // blocking the extractor.
-func (e *EthExtractor) Start(ctx context.Context, dataChan chan<- types.EthBlockData) {
+func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChannel) {
 	defer e.rpcClient.Close()
 
 	for {
@@ -115,7 +114,7 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan chan<- types.EthBlock
 
 		blockData, caughtUp, err := e.extractOnce(ctx)
 		if err == nil && blockData != nil {
-			dataChan <- *blockData
+			dataChan.Send(blockData)
 		}
 
 		if err != nil || caughtUp {
