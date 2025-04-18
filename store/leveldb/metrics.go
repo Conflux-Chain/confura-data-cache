@@ -16,9 +16,13 @@ func (m *Metrics) Write() metrics.Timer {
 }
 
 func (m *Metrics) NumTxs() metrics.Histogram {
-	return metricsUtil.GetOrRegisterHistogram("store/leveldb/num/txs")
+	return metricsUtil.GetOrRegisterHistogram("store/leveldb/data/txs")
 }
 
 func (m *Metrics) NumTraces() metrics.Histogram {
-	return metricsUtil.GetOrRegisterHistogram("store/leveldb/num/traces")
+	return metricsUtil.GetOrRegisterHistogram("store/leveldb/data/traces")
+}
+
+func (m *Metrics) DataSize() metrics.Histogram {
+	return metricsUtil.GetOrRegisterHistogram("store/leveldb/data/size")
 }

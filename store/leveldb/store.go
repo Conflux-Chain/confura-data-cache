@@ -120,30 +120,43 @@ func (store *Store) NextBlockNumber() uint64 {
 // Write writes the given block data in batch. It will return error if block data not written in sequence.
 //
 // Note, this method is not thread safe!
-func (store *Store) Write(data types.EthBlockData) error {
+func (store *Store) Write(data ...types.EthBlockData) error {
+	if len(data) == 0 {
+		return nil
+	}
+
 	// ensure block data written in sequence
-	blockNumber := data.Block.Number.Uint64()
-	if next := store.nextBlockNumber.Load(); next != blockNumber {
-		return errors.Errorf("Block data not written in sequence, expected = %v, actual = %v", next, blockNumber)
+	next := store.nextBlockNumber.Load()
+	for _, v := range data {
+		if bn := v.Block.Number.Uint64(); bn != next {
+			return errors.Errorf("Block data not written in sequence, expected = %v, actual = %v", next, bn)
+		}
+
+		next++
 	}
 
 	start := time.Now()
 	batch := new(leveldb.Batch)
 
-	store.writeBlock(batch, data.Block)
-	store.writeTransactions(batch, data.Block.Transactions.Transactions())
-	store.writeReceipts(batch, blockNumber, data.Receipts)
-	store.writeTraces(batch, blockNumber, data.Traces)
+	for _, v := range data {
+		blockNumber := v.Block.Number.Uint64()
+
+		store.writeBlock(batch, v.Block)
+		store.writeTransactions(batch, v.Block.Transactions.Transactions())
+		store.writeReceipts(batch, blockNumber, v.Receipts)
+		store.writeTraces(batch, blockNumber, v.Traces)
+	}
 
 	// update next block to write in sequence
 	var nextBlockNumberBuf [8]byte
-	binary.BigEndian.PutUint64(nextBlockNumberBuf[:], blockNumber+1)
+	binary.BigEndian.PutUint64(nextBlockNumberBuf[:], next)
 	batch.Put(keyNextBlockNumber, nextBlockNumberBuf[:])
 
 	// write earlist block number for the first time
 	if store.earlistBlockNumber.Load() == -1 {
+		earlistBlockNumber := data[0].Block.Number.Uint64()
 		var earlistBlockNumberBuf [8]byte
-		binary.BigEndian.PutUint64(earlistBlockNumberBuf[:], blockNumber)
+		binary.BigEndian.PutUint64(earlistBlockNumberBuf[:], earlistBlockNumber)
 		batch.Put(keyEarlistBlockNumber, earlistBlockNumberBuf[:])
 	}
 
@@ -152,17 +165,19 @@ func (store *Store) Write(data types.EthBlockData) error {
 	}
 
 	// update in-memory atomic variables
-	store.nextBlockNumber.Add(1)
+	store.nextBlockNumber.Store(next)
 	if store.earlistBlockNumber.Load() == -1 {
-		store.earlistBlockNumber.Store(int64(blockNumber))
+		store.earlistBlockNumber.Store(data[0].Block.Number.Int64())
 	}
 
 	// add metrics
-	store.metrics.Latest().Update(int64(blockNumber))
+	store.metrics.Latest().Update(int64(next - 1))
 	store.metrics.Write().UpdateSince(start)
-	store.metrics.NumTxs().Update(int64(len(data.Receipts)))
-	store.metrics.NumTraces().Update(int64(len(data.Traces)))
-	// TODO data size
+	for _, v := range data {
+		store.metrics.NumTxs().Update(int64(len(v.Receipts)))
+		store.metrics.NumTraces().Update(int64(len(v.Traces)))
+		store.metrics.DataSize().Update(int64(v.Size()))
+	}
 
 	return nil
 }
