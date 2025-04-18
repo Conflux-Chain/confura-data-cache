@@ -24,6 +24,10 @@ type MemoryBoundedChannel[T Sizable] struct {
 
 // NewMemoryBoundedChannel creates a new memory-bounded channel.
 func NewMemoryBoundedChannel[T Sizable](capacity uint64) *MemoryBoundedChannel[T] {
+	if capacity == 0 {
+		panic("capacity must be greater than 0")
+	}
+
 	m := &MemoryBoundedChannel[T]{
 		capacity: capacity,
 		buffer:   list.New(),

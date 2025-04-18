@@ -2,6 +2,7 @@ package extract
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"os"
 	"strings"
@@ -67,7 +68,7 @@ func TestEvmExtractIntegration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dataChan := NewEthMemoryBoundedChannel(0)
+	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
 	go extractor.Start(ctx, dataChan)
 
 	data := dataChan.Receive()
@@ -276,7 +277,7 @@ func TestEthExtractorStart(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		ex := newMockExtractor(EthConfig{PollInterval: time.Millisecond}, c, nil)
 
-		dataChan := NewEthMemoryBoundedChannel(0)
+		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
 
 		go ex.Start(ctx, dataChan)
 		cancel()
@@ -304,7 +305,7 @@ func TestEthExtractorStart(t *testing.T) {
 			PollInterval:      time.Millisecond,
 		}, c, cache)
 
-		dataChan := NewEthMemoryBoundedChannel(0)
+		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
 		go ex.Start(ctx, dataChan)
 
 		resultChan := make(chan *types.EthBlockData)
