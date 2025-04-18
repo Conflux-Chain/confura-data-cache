@@ -77,6 +77,9 @@ func TestStoreWrite(t *testing.T) {
 	store, close := createTestStore(t)
 	defer close()
 
+	earlist, ok := store.EarlistBlockNumber()
+	assert.Equal(t, uint64(0), earlist)
+	assert.False(t, ok)
 	assert.Equal(t, uint64(0), store.NextBlockNumber())
 
 	// write block 0
@@ -98,8 +101,18 @@ func TestStoreWrite(t *testing.T) {
 	ethData2 := createTestEthData(2, common.HexToHash("0x6662"))
 	assert.Nil(t, store.Write(ethData2))
 
+	// check earlist block number
+	earlist, ok, err := store.readUint64(keyEarlistBlockNumber)
+	assert.Nil(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, uint64(0), earlist)
+
+	earlist, ok = store.EarlistBlockNumber()
+	assert.Equal(t, uint64(0), earlist)
+	assert.True(t, ok)
+
 	// check next block number
-	next, ok, err := store.getNextBlockNumber()
+	next, ok, err := store.readUint64(keyNextBlockNumber)
 	assert.Nil(t, err)
 	assert.True(t, ok)
 	assert.Equal(t, uint64(3), next)
@@ -107,24 +120,17 @@ func TestStoreWrite(t *testing.T) {
 	assert.Equal(t, uint64(3), store.NextBlockNumber())
 }
 
-func TestStoreCustomNextBlockNumber(t *testing.T) {
-	store, close := createTestStore(t, 7)
-	defer close()
-
-	assert.Equal(t, uint64(7), store.NextBlockNumber())
-}
-
 func TestStoreBreakPoint(t *testing.T) {
 	path, err := os.MkdirTemp("", "confura-data-cache-")
 	assert.Nil(t, err)
 
-	store, err := NewStore(path)
+	store, err := NewStore(path, 7)
 	assert.Nil(t, err)
-	assert.Equal(t, uint64(0), store.NextBlockNumber())
+	assert.Equal(t, uint64(7), store.NextBlockNumber())
 
-	// write block 0 & 1
-	store.Write(createTestEthData(0, common.HexToHash("0x6660")))
-	store.Write(createTestEthData(1, common.HexToHash("0x6661")))
+	// write block 7 & 8
+	store.Write(createTestEthData(7, common.HexToHash("0x6667")))
+	store.Write(createTestEthData(8, common.HexToHash("0x6668")))
 
 	// close store
 	assert.Nil(t, store.Close())
@@ -133,6 +139,11 @@ func TestStoreBreakPoint(t *testing.T) {
 	store, err = NewStore(path)
 	assert.Nil(t, err)
 
+	// earlist block is 7
+	earlist, ok := store.EarlistBlockNumber()
+	assert.True(t, ok)
+	assert.Equal(t, uint64(7), earlist)
+
 	// start from block 2
-	assert.Equal(t, uint64(2), store.NextBlockNumber())
+	assert.Equal(t, uint64(9), store.NextBlockNumber())
 }
