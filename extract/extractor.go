@@ -41,10 +41,6 @@ type Config[T any] struct {
 
 	// PollInterval specifies how often to poll for new blocks during normal, steady-state operation.
 	PollInterval time.Duration `default:"1s"`
-
-	// Number of concurrent goroutines to use for fetching block data during catch-up sync.
-	// Default is 0, the number of available CPUs will be used.
-	Concurrency int
 }
 
 // EthConfig is a Config specialization for Ethereum-compatible blockchains.
