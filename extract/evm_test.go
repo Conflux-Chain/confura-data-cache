@@ -67,8 +67,7 @@ func TestEvmExtractIntegration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	blockDataCh := make(chan *types.EthBlockData, 1)
-	dataChan := NewMemoryBoundedChannel(blockDataCh, 0)
+	dataChan := NewEthMemoryBoundedChannel(1, 0)
 	go extractor.Start(ctx, dataChan)
 
 	data := dataChan.Receive()
@@ -277,8 +276,7 @@ func TestEthExtractorStart(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		ex := newMockExtractor(EthConfig{PollInterval: time.Millisecond}, c, nil)
 
-		blockDataCh := make(chan *types.EthBlockData)
-		dataChan := NewMemoryBoundedChannel(blockDataCh, 0)
+		dataChan := NewEthMemoryBoundedChannel(0, 0)
 
 		go ex.Start(ctx, dataChan)
 		cancel()
@@ -306,12 +304,11 @@ func TestEthExtractorStart(t *testing.T) {
 			PollInterval:      time.Millisecond,
 		}, c, cache)
 
-		blockDataCh := make(chan *types.EthBlockData)
-		dataChan := NewMemoryBoundedChannel(blockDataCh, 0)
+		dataChan := NewEthMemoryBoundedChannel(0, 0)
 		go ex.Start(ctx, dataChan)
 
 		select {
-		case data := <-dataChan.RChan(ctx):
+		case data := <-dataChan.RChan():
 			assert.Equal(t, uint64(100), data.Block.Number.Uint64())
 		case <-time.After(100 * time.Millisecond):
 			t.Fatal("Timed out waiting for block data")
