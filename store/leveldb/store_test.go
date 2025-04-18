@@ -82,6 +82,9 @@ func TestStoreWrite(t *testing.T) {
 	assert.False(t, ok)
 	assert.Equal(t, uint64(0), store.NextBlockNumber())
 
+	// write empty
+	assert.Nil(t, store.Write())
+
 	// write block 0
 	ethData0 := createTestEthData(0, common.HexToHash("0x6660"))
 	assert.Nil(t, store.Write(ethData0))
