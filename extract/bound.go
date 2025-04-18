@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"container/list"
 	"sync"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
@@ -11,120 +12,104 @@ type Sizable interface {
 	Size() uint64
 }
 
-// MemoryBoundedChannel wraps a buffered channel and enforces memory usage limits.
+// MemoryBoundedChannel wraps a memory-bounded channel.
 type MemoryBoundedChannel[T Sizable] struct {
-	mu    sync.Mutex // guards memory usage
-	cond  *sync.Cond // signals when memory is released
-	ch    chan T     // underlying buffered channel
-	used  uint64     // current memory used by buffered items
-	limit uint64     // memory limit in bytes (0 = unlimited)
+	mu           sync.RWMutex
+	size         uint64     // current memory size used by buffered items
+	capacity     uint64     // memory limit in bytes (0 = unlimited)
+	buffer       *list.List // buffered items to receive (FIFO)
+	notFullCond  *sync.Cond // signals when memory is not full
+	notEmptyCond *sync.Cond // signals when buffer is not empty
 }
 
-// NewMemoryBoundedChannel constructs a bounded channel with memory constraints.
-func NewMemoryBoundedChannel[T Sizable](size int, limit uint64) *MemoryBoundedChannel[T] {
+// NewMemoryBoundedChannel creates a new memory-bounded channel.
+func NewMemoryBoundedChannel[T Sizable](capacity uint64) *MemoryBoundedChannel[T] {
 	m := &MemoryBoundedChannel[T]{
-		limit: limit,
-		ch:    make(chan T, size),
+		capacity: capacity,
+		buffer:   list.New(),
 	}
-	m.cond = sync.NewCond(&m.mu)
+	m.notFullCond = sync.NewCond(&m.mu)
+	m.notEmptyCond = sync.NewCond(&m.mu)
 	return m
 }
 
-// Send blocks until enough memory is available and the item can be sent.
-func (m *MemoryBoundedChannel[T]) Send(t T) {
-	m.reserve(t.Size())
-	m.ch <- t
-}
-
-// TrySend attempts to send the item without blocking.
-// Returns false if over memory limit or channel is full.
-func (m *MemoryBoundedChannel[T]) TrySend(t T) bool {
-	size := t.Size()
-
-	if !m.tryReserve(size) {
-		return false
-	}
-
-	select {
-	case m.ch <- t:
-		return true
-	default: // channel is full, rollback reservation
-		m.release(size)
-		return false
-	}
-}
-
-// Receive reads an item from the channel and updates memory usage.
-func (m *MemoryBoundedChannel[T]) Receive() T {
-	t := <-m.ch
-	m.release(t.Size())
-	return t
-}
-
-// TryReceive attempts to read from the channel without blocking.
-func (m *MemoryBoundedChannel[T]) TryReceive() (T, bool) {
-	select {
-	case t := <-m.ch:
-		m.release(t.Size())
-		return t, true
-	default:
-		var zero T
-		return zero, false
-	}
-}
-
-// RChan returns a read-only channel for select-style receive, with memory tracking.
-func (m *MemoryBoundedChannel[T]) RChan() <-chan T {
-	out := make(chan T)
-	go func() {
-		defer close(out)
-		for t := range m.ch {
-			out <- t
-			m.release(t.Size())
-		}
-	}()
-	return out
-}
-
-// Close closes the channel.
-func (m *MemoryBoundedChannel[T]) Close() {
-	close(m.ch)
-}
-
-// reserve blocks until memory for the given size can be reserved.
-func (m *MemoryBoundedChannel[T]) reserve(size uint64) {
+// Send blocks until enough memory is available to buffer the item.
+func (m *MemoryBoundedChannel[T]) Send(item T) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for m.limit > 0 && m.used+size > m.limit && len(m.ch) > 0 {
-		m.cond.Wait()
+	size := item.Size()
+	for m.capacity > 0 && m.size+size > m.capacity && m.buffer.Len() > 0 {
+		m.notFullCond.Wait()
 	}
-	m.used += size
+	m.enqueue(item)
 }
 
-// tryReserve attempts to reserve memory for the given size without blocking.
-func (m *MemoryBoundedChannel[T]) tryReserve(size uint64) bool {
+// TrySend attempts to send without blocking. Returns false if over memory limit.
+func (m *MemoryBoundedChannel[T]) TrySend(item T) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if m.limit > 0 && m.used+size > m.limit && len(m.ch) > 0 {
+	size := item.Size()
+	if m.capacity > 0 && m.size+size > m.capacity && m.buffer.Len() > 0 {
 		return false
 	}
-	m.used += size
+	m.enqueue(item)
 	return true
 }
 
-// release deducts memory usage and signals waiting Senders.
-func (m *MemoryBoundedChannel[T]) release(size uint64) {
+// Receive blocks until an item is available and returns it.
+func (m *MemoryBoundedChannel[T]) Receive() T {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.used -= size
-	m.cond.Broadcast()
+	for m.buffer.Len() == 0 {
+		m.notEmptyCond.Wait()
+	}
+	return m.dequeue()
 }
 
+// TryReceive returns an item if available, otherwise false.
+func (m *MemoryBoundedChannel[T]) TryReceive() (T, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.buffer.Len() > 0 {
+		return m.dequeue(), true
+	}
+	return *new(T), false
+}
+
+// Len returns the number of items in the channel.
+func (m *MemoryBoundedChannel[T]) Len() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.buffer.Len()
+}
+
+// enqueue adds item and updates memory.
+func (m *MemoryBoundedChannel[T]) enqueue(item T) {
+	m.buffer.PushBack(item)
+	m.size += item.Size()
+
+	m.notEmptyCond.Broadcast()
+}
+
+// dequeue removes and returns front item, updating memory.
+func (m *MemoryBoundedChannel[T]) dequeue() T {
+	elem := m.buffer.Front()
+	m.buffer.Remove(elem)
+
+	item := elem.Value.(T)
+	m.size -= item.Size()
+
+	m.notFullCond.Broadcast()
+	return item
+}
+
+// Convenience alias for EthBlockData channels.
 type EthMemoryBoundedChannel = MemoryBoundedChannel[*types.EthBlockData]
 
-func NewEthMemoryBoundedChannel(size int, limit uint64) *EthMemoryBoundedChannel {
-	return NewMemoryBoundedChannel[*types.EthBlockData](size, limit)
+func NewEthMemoryBoundedChannel(capacity uint64) *EthMemoryBoundedChannel {
+	return NewMemoryBoundedChannel[*types.EthBlockData](capacity)
 }

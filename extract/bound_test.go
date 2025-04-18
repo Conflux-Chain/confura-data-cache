@@ -19,19 +19,19 @@ func (m mockItem) Size() uint64 {
 }
 
 func TestMemoryBoundedChannelSendAndReceive(t *testing.T) {
-	mc := NewMemoryBoundedChannel[mockItem](10, 100)
-	defer mc.Close()
+	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 1, size: 42}
 	mc.Send(item)
+	assert.Equal(t, 1, mc.Len())
 
 	received := mc.Receive()
 	assert.Equal(t, item, received)
+	assert.Equal(t, 0, mc.Len())
 }
 
 func TestMemoryBoundedChannelTrySendSuccess(t *testing.T) {
-	mc := NewMemoryBoundedChannel[mockItem](1, 100)
-	defer mc.Close()
+	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 2, size: 50}
 	ok := mc.TrySend(item)
@@ -41,9 +41,8 @@ func TestMemoryBoundedChannelTrySendSuccess(t *testing.T) {
 	assert.Equal(t, item, out)
 }
 
-func TestMemoryBoundedChannelTrySendFailDueToLimit(t *testing.T) {
-	mc := NewMemoryBoundedChannel[mockItem](1, 100)
-	defer mc.Close()
+func TestMemoryBoundedChannelTrySendFailDueToMemoryFull(t *testing.T) {
+	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 1, size: 2}
 	ok := mc.TrySend(item)
@@ -54,18 +53,8 @@ func TestMemoryBoundedChannelTrySendFailDueToLimit(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestMemoryBoundedChannelTrySendFailDueToFullChannel(t *testing.T) {
-	mc := NewMemoryBoundedChannel[mockItem](1, 100)
-	defer mc.Close()
-
-	item := mockItem{id: 4, size: 50}
-	assert.True(t, mc.TrySend(item))
-	assert.False(t, mc.TrySend(item)) // channel is full
-}
-
 func TestMemoryBoundedChannelTryReceive(t *testing.T) {
-	mc := NewMemoryBoundedChannel[mockItem](1, 100)
-	defer mc.Close()
+	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 5, size: 30}
 	assert.True(t, mc.TrySend(item))
@@ -78,25 +67,8 @@ func TestMemoryBoundedChannelTryReceive(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestMemoryBoundedChannelRChan(t *testing.T) {
-	mc := NewMemoryBoundedChannel[mockItem](1, 100)
-	defer mc.Close()
-
-	item := mockItem{id: 6, size: 60}
-	mc.Send(item)
-
-	selectCh := mc.RChan()
-	select {
-	case got := <-selectCh:
-		assert.Equal(t, item, got)
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("timed out waiting for item on RChan")
-	}
-}
-
 func TestMemoryBoundedChannelBlockingSendUnderLimit(t *testing.T) {
-	mc := NewMemoryBoundedChannel[mockItem](1, 100)
-	defer mc.Close()
+	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 7, size: 100}
 	var wg sync.WaitGroup
@@ -115,8 +87,7 @@ func TestMemoryBoundedChannelBlockingSendUnderLimit(t *testing.T) {
 }
 
 func TestMemoryBoundedChannelConcurrentSendReceive(t *testing.T) {
-	mc := NewMemoryBoundedChannel[mockItem](5, 100)
-	defer mc.Close()
+	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	numItems := 5
 	var wg sync.WaitGroup
@@ -125,8 +96,8 @@ func TestMemoryBoundedChannelConcurrentSendReceive(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < numItems; i++ {
-			mc.Send(mockItem{id: i, size: 50})
+		for i := range numItems {
+			mc.Send(mockItem{id: i, size: uint64(50 * i)})
 		}
 	}()
 
@@ -134,9 +105,10 @@ func TestMemoryBoundedChannelConcurrentSendReceive(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < numItems; i++ {
+		for i := range numItems {
 			item := mc.Receive()
-			assert.Equal(t, uint64(50), item.Size())
+			assert.Equal(t, i, item.id)
+			assert.Equal(t, uint64(50*i), item.Size())
 		}
 	}()
 
