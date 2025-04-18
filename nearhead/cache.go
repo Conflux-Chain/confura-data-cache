@@ -276,7 +276,106 @@ func (c *EthCache) GetTransactionTraces(txHash common.Hash) []ethTypes.Localized
 	return traces
 }
 
+// GetLogsByBlockRange returns logs matching given filter parameters.
+// nil returned when not cached.
+// empty logs returned when not exists.
+func (c *EthCache) GetLogsByBlockRange(fromBlock, toBlock uint64, logFilter LogFilterOpt) *EthLogs {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+
+	// nil returned when not cached
+	if (c.start == c.end) ||
+		(fromBlock < c.start && toBlock < c.start) ||
+		(fromBlock >= c.end && toBlock >= c.end) ||
+		(fromBlock > toBlock) {
+		return nil
+	}
+
+	// contract address filter
+	addressMap := make(map[common.Address]bool)
+	for _, address := range logFilter.Addresses {
+		addressMap[address] = true
+	}
+
+	// topic filter
+	topicMap := make([]map[common.Hash]bool, 0, 4)
+	for i, topics := range logFilter.Topics {
+		topicMap = append(topicMap, make(map[common.Hash]bool))
+		for _, topic := range topics {
+			topicMap[i][topic] = true
+		}
+	}
+
+	// from / to block filter
+	from := max(fromBlock, c.start)
+	to := min(toBlock, c.end)
+
+	logs := make([]ethTypes.Log, 0)
+	for bn := from; bn <= to; bn++ {
+		blockLogs := c.collectBlockLogs(bn, addressMap, topicMap)
+		logs = append(logs, blockLogs...)
+	}
+
+	return &EthLogs{
+		FromBlock: from,
+		ToBlock:   to,
+		Logs:      logs,
+	}
+}
+
+// GetLogsByBlockHash returns logs matching given filter parameters.
+func (c *EthCache) GetLogsByBlockHash(blockHash common.Hash, logFilter LogFilterOpt) *EthLogs {
+	c.rwMutex.RLock()
+	defer c.rwMutex.RUnlock()
+
+	blockNumber, exists := c.blockHash2BlockNumbers[blockHash]
+	if !exists {
+		return nil
+	}
+
+	return c.GetLogsByBlockRange(blockNumber, blockNumber, logFilter)
+}
+
+func (c *EthCache) collectBlockLogs(blockNumber uint64, addrMap map[common.Address]bool,
+	topicMap []map[common.Hash]bool) []ethTypes.Log {
+	logs := make([]ethTypes.Log, 0)
+
+	for _, receipt := range c.blockNumber2BlockDatas[blockNumber].Receipts {
+		for _, log := range receipt.Logs {
+			if len(addrMap) > 0 && !addrMap[log.Address] {
+				continue
+			}
+
+			wanted := true
+			for i, t := range log.Topics {
+				if len(topicMap) > i && len(topicMap[i]) > 0 && !topicMap[i][t] {
+					wanted = false
+					break
+				}
+			}
+
+			if wanted {
+				logs = append(logs, *log)
+			}
+		}
+	}
+
+	return logs
+}
+
 type TransactionIndex struct {
 	blockNumber      uint64
 	transactionIndex uint64
+}
+
+// LogFilterOpt contains options for contract log filtering.
+type LogFilterOpt struct {
+	Addresses []common.Address
+	Topics    [][]common.Hash
+}
+
+type EthLogs struct {
+	FromBlock uint64
+	ToBlock   uint64
+	Logs      []ethTypes.Log
 }
