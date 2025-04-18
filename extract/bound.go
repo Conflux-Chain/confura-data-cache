@@ -74,14 +74,14 @@ func (m *MemoryBoundedChannel[T]) Receive() T {
 }
 
 // TryReceive returns an item if available, otherwise false.
-func (m *MemoryBoundedChannel[T]) TryReceive() (T, bool) {
+func (m *MemoryBoundedChannel[T]) TryReceive() (v T, ok bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.buffer.Len() > 0 {
-		return m.dequeue(), true
+		v, ok = m.dequeue(), true
 	}
-	return *new(T), false
+	return
 }
 
 // Len returns the number of items in the channel.
