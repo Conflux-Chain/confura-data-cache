@@ -290,8 +290,8 @@ func (c *EthCache) GetLogsByBlockRange(fromBlock, toBlock uint64, logFilter Filt
 
 	// nil returned when not cached
 	if (c.start == c.end) ||
-		(fromBlock < c.start && toBlock < c.start) ||
-		(fromBlock >= c.end && toBlock >= c.end) {
+		toBlock < c.start ||
+		fromBlock >= c.end {
 		return nil, nil
 	}
 
@@ -312,7 +312,7 @@ func (c *EthCache) GetLogsByBlockRange(fromBlock, toBlock uint64, logFilter Filt
 
 	// from / to block filter
 	from := max(fromBlock, c.start)
-	to := min(toBlock, c.end)
+	to := min(toBlock, c.end-1)
 
 	logs := make([]ethTypes.Log, 0)
 	for bn := from; bn <= to; bn++ {

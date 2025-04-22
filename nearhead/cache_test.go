@@ -469,6 +469,19 @@ func TestEthCache_GetLogs(t *testing.T) {
 		assert.LessOrEqual(t, log.BlockNumber, toBlock)
 	}
 
+	// block range filter -- to block greater than cache.end
+	fromBlock = uint64(120177555+batchBlocks) - 3
+	toBlock = uint64(120177555 + batchBlocks)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 9)
+	assert.Equal(t, logs.FromBlock, fromBlock)
+	assert.Equal(t, logs.ToBlock, toBlock-1)
+	for _, log := range logs.Logs {
+		assert.GreaterOrEqual(t, log.BlockNumber, fromBlock)
+		assert.LessOrEqual(t, log.BlockNumber, toBlock)
+	}
+
 	// block range filter -- not cached
 	fromBlock = uint64(120177550)
 	toBlock = uint64(120177552)
