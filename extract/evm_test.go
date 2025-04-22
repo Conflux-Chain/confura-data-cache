@@ -368,6 +368,7 @@ func TestEthExtractorCatchUpUntilFinalized(t *testing.T) {
 			assert.NotNil(t, data)
 			assert.Equal(t, uint64(i), data.Block.Number.Uint64())
 		case <-time.After(100 * time.Millisecond):
+			close(resultChan)
 			t.Fatal("Timed out waiting for block data")
 		}
 	}
