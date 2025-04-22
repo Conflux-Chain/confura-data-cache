@@ -105,7 +105,7 @@ func TestNewEvmExtractor(t *testing.T) {
 		})
 	}
 
-	t.Run("CustomFinalizedProvider", func(t *testing.T) {
+	t.Run("CustomFinalizedProviderError", func(t *testing.T) {
 		cfg := EthConfig{TargetBlockNumber: ethTypes.FinalizedBlockNumber, RpcEndpoint: "http://localhost:8545"}
 		c := new(MockEthRpcClient)
 		c.On("BlockHeaderByNumber", mock.Anything, cfg.TargetBlockNumber).Return((*ethTypes.Block)(nil), errors.New("rpc error"))
@@ -114,6 +114,22 @@ func TestNewEvmExtractor(t *testing.T) {
 
 		err = ex.hashCache.Append(1, common.HexToHash("0x1"))
 		assert.ErrorContains(t, err, "failed to get finalized block number")
+	})
+
+	t.Run("CustomFinalizedProviderOk", func(t *testing.T) {
+		cfg := EthConfig{TargetBlockNumber: ethTypes.FinalizedBlockNumber, RpcEndpoint: "http://localhost:8545"}
+		c := new(MockEthRpcClient)
+		c.On("BlockHeaderByNumber", mock.Anything, cfg.TargetBlockNumber).Return(makeMockBlock(100, "0x100", "0x99"), nil)
+		ex, err := NewEvmExtractor(cfg, newEthFinalizedHeightProvider(c))
+		assert.NoError(t, err)
+
+		err = ex.hashCache.Append(1, common.HexToHash("0x1"))
+		assert.NoError(t, err)
+
+		bn, bh, ok := ex.hashCache.Latest()
+		assert.True(t, ok)
+		assert.Equal(t, uint64(1), bn)
+		assert.Equal(t, common.HexToHash("0x1"), bh)
 	})
 }
 
@@ -273,9 +289,11 @@ func TestEthExtractorStart(t *testing.T) {
 	t.Run("ContextCancellation", func(t *testing.T) {
 		c := new(MockEthRpcClient)
 		c.On("Close").Return(nil)
+		c.On("BlockHeaderByNumber", mock.Anything, ethTypes.FinalizedBlockNumber).
+			Return(makeMockBlock(100, "0x100", "0x99"), nil)
 
 		ctx, cancel := context.WithCancel(context.Background())
-		ex := newMockExtractor(EthConfig{PollInterval: time.Millisecond}, c, nil)
+		ex := newMockExtractor(EthConfig{PollInterval: time.Millisecond, StartBlockNumber: 101}, c, nil)
 
 		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
 
@@ -295,6 +313,7 @@ func TestEthExtractorStart(t *testing.T) {
 		block := makeMockBlock(100, "0x100", "0x99")
 		c.On("BlockHeaderByNumber", ctx, ethTypes.LatestBlockNumber).Return(block, nil)
 		c.On("BlockBundleByNumber", ctx, ethTypes.BlockNumber(100)).Return(types.EthBlockData{Block: block}, nil)
+		c.On("BlockHeaderByNumber", ctx, ethTypes.FinalizedBlockNumber).Return(makeMockBlock(99, "0x99", "0x98"), nil)
 
 		cache := NewBlockHashCache(0)
 		cache.Append(99, common.HexToHash("0x99"))
@@ -320,5 +339,64 @@ func TestEthExtractorStart(t *testing.T) {
 		case <-time.After(100 * time.Millisecond):
 			t.Fatal("Timed out waiting for block data")
 		}
+	})
+}
+
+func TestEthExtractorCatchUpUntilFinalized(t *testing.T) {
+	c := new(MockEthRpcClient)
+	for i := 98; i <= 100; i++ {
+		blockData := types.EthBlockData{
+			Block: &ethTypes.Block{Number: big.NewInt(int64(i))},
+		}
+		c.On("BlockBundleByNumber", mock.Anything, ethTypes.BlockNumber(i)).Return(blockData, nil)
+	}
+	c.On("BlockHeaderByNumber", mock.Anything, ethTypes.FinalizedBlockNumber).
+		Return(makeMockBlock(100, "0x100", "0x99"), nil)
+
+	ex := newMockExtractor(EthConfig{Concurrency: 2, StartBlockNumber: 98}, c, nil)
+	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+	ex.catchUpUntilFinalized(context.Background(), dataChan)
+
+	for i := 98; i <= 100; i++ {
+		resultChan := make(chan *types.EthBlockData)
+		go func() {
+			resultChan <- dataChan.Receive()
+		}()
+
+		select {
+		case data := <-resultChan:
+			assert.NotNil(t, data)
+			assert.Equal(t, uint64(i), data.Block.Number.Uint64())
+		case <-time.After(100 * time.Millisecond):
+			t.Fatal("Timed out waiting for block data")
+		}
+	}
+	assert.Equal(t, ex.StartBlockNumber, uint64(101))
+}
+
+func TestCatchUpOnce(t *testing.T) {
+	t.Run("ErrorGettingFinalizedBlock", func(t *testing.T) {
+		c := new(MockEthRpcClient)
+		c.On("BlockHeaderByNumber", mock.Anything, ethTypes.FinalizedBlockNumber).
+			Return((*ethTypes.Block)(nil), errors.New("rpc error"))
+
+		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+		ex := newMockExtractor(EthConfig{Concurrency: 2, StartBlockNumber: 98}, c, nil)
+		err, done := ex.catchUpOnce(context.Background(), dataChan)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "rpc error")
+		assert.False(t, done)
+	})
+
+	t.Run("AlreadyCatchUp", func(t *testing.T) {
+		c := new(MockEthRpcClient)
+		c.On("BlockHeaderByNumber", mock.Anything, ethTypes.FinalizedBlockNumber).
+			Return(&ethTypes.Block{Number: big.NewInt(90)}, nil)
+
+		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+		ex := newMockExtractor(EthConfig{Concurrency: 2, StartBlockNumber: 98}, c, nil)
+		err, done := ex.catchUpOnce(context.Background(), dataChan)
+		assert.NoError(t, err)
+		assert.True(t, done)
 	})
 }

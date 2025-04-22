@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	"github.com/openweb3/web3go"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -61,7 +62,6 @@ func newEthFinalizedHeightProvider(c EthRpcClient) FinalizedHeightProvider {
 
 // EthExtractor is an EVM compatible blockchain data extractor.
 // TODO:
-// - add catch-up sync to allow concurrent syncing of multiple blocks
 // - add metrics, logging and monitoring
 // - add graceful shutdown to ensure data consistency
 type EthExtractor struct {
@@ -105,6 +105,9 @@ func NewEvmExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthE
 func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChannel) {
 	defer e.rpcClient.Close()
 
+	// Catch up to the latest finalized block.
+	e.catchUpUntilFinalized(ctx, dataChan)
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -121,6 +124,52 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChan
 			time.Sleep(e.PollInterval)
 		}
 	}
+}
+
+// catchUpUntilFinalized catches up to the latest finalized block.
+func (e *EthExtractor) catchUpUntilFinalized(ctx context.Context, dataChan *EthMemoryBoundedChannel) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		err, done := e.catchUpOnce(ctx, dataChan)
+		if err != nil {
+			logrus.WithError(err).Error("failed to catch up to finalized block")
+			time.Sleep(e.PollInterval)
+			continue
+		}
+		if done {
+			return
+		}
+	}
+}
+
+func (e *EthExtractor) catchUpOnce(ctx context.Context, dataChan *EthMemoryBoundedChannel) (error, bool) {
+	latestFinalizedBlock, err := e.rpcClient.BlockHeaderByNumber(ctx, ethTypes.FinalizedBlockNumber)
+	if err != nil {
+		return errors.WithMessage(err, "failed to get finalized block"), false
+	}
+
+	finalizedBlockNumber := latestFinalizedBlock.Number.Uint64()
+	if e.StartBlockNumber >= finalizedBlockNumber {
+		return nil, true
+	}
+
+	worker := NewEthParallelWorker(e.StartBlockNumber, dataChan, e.rpcClient)
+	numTasks := finalizedBlockNumber - e.StartBlockNumber + 1
+
+	err = parallel.Serial(ctx, worker, int(numTasks), parallel.SerialOption{
+		Routines: e.Concurrency, Window: 1,
+	})
+	e.StartBlockNumber += worker.NumCollected()
+	if err != nil {
+		return err, false
+	}
+
+	return nil, false
 }
 
 // extractOnce fetches the block data for the current block number.
