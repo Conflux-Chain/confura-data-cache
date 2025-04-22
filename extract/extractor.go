@@ -3,6 +3,7 @@ package extract
 import (
 	"time"
 
+	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	"github.com/openweb3/go-rpc-provider"
 	"github.com/pkg/errors"
 )
@@ -20,6 +21,9 @@ func NewInconsistentChainDataError(detail string) error {
 }
 
 type Config[T any] struct {
+	// Concurrency options used for catching up to the latest finalized block.
+	parallel.SerialOption
+
 	// TargetBlockNumber is the block number the extractor is catching up to during synchronization.
 	TargetBlockNumber T
 
