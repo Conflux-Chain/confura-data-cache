@@ -41,7 +41,7 @@ func TestEthParallelWorkerParallelDo(t *testing.T) {
 		DisableTimestamp: true,
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 
 	result, err = worker.ParallelDo(ctx, 0, 1)
