@@ -12,6 +12,7 @@ import (
 // Config is cache configurations
 type Config struct {
 	MaxMemory uint64 `default:"104857600"` // 100MB
+	MaxLogs   int    `default:"10000"`
 }
 
 // EthCache is used to cache near head data
@@ -317,6 +318,9 @@ func (c *EthCache) GetLogsByBlockRange(fromBlock, toBlock uint64, logFilter Filt
 	for bn := from; bn <= to; bn++ {
 		blockLogs := c.collectBlockLogs(bn, addressMap, topicMap)
 		logs = append(logs, blockLogs...)
+		if len(logs) > c.config.MaxLogs {
+			return nil, errors.Errorf("the result set exceeds the max limit of %v logs, please narrow down your filter conditions", c.config.MaxLogs)
+		}
 	}
 
 	return &EthLogs{

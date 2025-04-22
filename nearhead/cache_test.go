@@ -431,20 +431,23 @@ func TestEthCache_GetLogs(t *testing.T) {
 
 	// block hash filter
 	blockHash := common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e8")
-	logs := cache.GetLogsByBlockHash(blockHash, FilterOpt{})
+	logs, err := cache.GetLogsByBlockHash(blockHash, FilterOpt{})
+	assert.Nil(t, err)
 	assert.Len(t, logs.Logs, 3)
 	for _, log := range logs.Logs {
 		assert.Equal(t, log.BlockHash, blockHash)
 	}
 
 	// block hash filter -- not cached
-	logs = cache.GetLogsByBlockHash(hashNotCached, FilterOpt{})
+	logs, err = cache.GetLogsByBlockHash(hashNotCached, FilterOpt{})
+	assert.Nil(t, err)
 	assert.Nil(t, logs)
 
 	// block range filter
 	fromBlock := uint64(120177555)
 	toBlock := uint64(120177557)
-	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Nil(t, err)
 	assert.Len(t, logs.Logs, 9)
 	assert.Equal(t, logs.FromBlock, fromBlock)
 	assert.Equal(t, logs.ToBlock, toBlock)
@@ -456,7 +459,8 @@ func TestEthCache_GetLogs(t *testing.T) {
 	// block range filter -- from block greater than cache.start
 	fromBlock = uint64(120177557)
 	toBlock = uint64(120177559)
-	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Nil(t, err)
 	assert.Len(t, logs.Logs, 9)
 	assert.Equal(t, logs.FromBlock, fromBlock)
 	assert.Equal(t, logs.ToBlock, toBlock)
@@ -468,7 +472,8 @@ func TestEthCache_GetLogs(t *testing.T) {
 	// block range filter -- not cached
 	fromBlock = uint64(120177550)
 	toBlock = uint64(120177552)
-	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Nil(t, err)
 	assert.Nil(t, logs)
 
 	// addresses filter -- one contract
@@ -480,7 +485,8 @@ func TestEthCache_GetLogs(t *testing.T) {
 	filter := FilterOpt{
 		Addresses: addresses,
 	}
-	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
 	assert.Len(t, logs.Logs, 6)
 	for _, log := range logs.Logs {
 		assert.Contains(t, addresses, log.Address)
@@ -496,7 +502,8 @@ func TestEthCache_GetLogs(t *testing.T) {
 	filter = FilterOpt{
 		Addresses: addresses,
 	}
-	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
 	assert.Len(t, logs.Logs, 9)
 	for _, log := range logs.Logs {
 		assert.Contains(t, addresses, log.Address)
@@ -521,7 +528,8 @@ func TestEthCache_GetLogs(t *testing.T) {
 		Addresses: addresses,
 		Topics:    topics,
 	}
-	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
 	assert.Len(t, logs.Logs, 9)
 	for _, log := range logs.Logs {
 		assert.Contains(t, topics0, log.Topics[0])
@@ -546,7 +554,8 @@ func TestEthCache_GetLogs(t *testing.T) {
 		Addresses: addresses,
 		Topics:    topics,
 	}
-	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
 	assert.Len(t, logs.Logs, 9)
 	for _, log := range logs.Logs {
 		assert.Contains(t, topics1, log.Topics[1])
@@ -570,7 +579,8 @@ func TestEthCache_GetLogs(t *testing.T) {
 		Addresses: addresses,
 		Topics:    topics,
 	}
-	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
 	assert.Len(t, logs.Logs, 6)
 	for _, log := range logs.Logs {
 		assert.Contains(t, topics2, log.Topics[2])
@@ -598,7 +608,8 @@ func TestEthCache_GetLogs(t *testing.T) {
 		Addresses: addresses,
 		Topics:    topics,
 	}
-	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
 	assert.Len(t, logs.Logs, 3)
 	for _, log := range logs.Logs {
 		assert.Contains(t, topics0, log.Topics[0])
