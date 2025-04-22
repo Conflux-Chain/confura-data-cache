@@ -1,14 +1,17 @@
 package extract
 
 import (
+	"bytes"
 	"context"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -22,7 +25,7 @@ func TestEthParallelWorkerParallelDo(t *testing.T) {
 	mockClient := new(MockEthRpcClient)
 	mockClient.On("BlockBundleByNumber", mock.Anything, ethTypes.BlockNumber(100)).Return(mockData, nil)
 	mockClient.On("BlockBundleByNumber", mock.Anything, ethTypes.BlockNumber(101)).
-		Return(types.EthBlockData{}, context.DeadlineExceeded)
+		Return(types.EthBlockData{}, errors.New("rpc error"))
 
 	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
 	worker := NewEthParallelWorker(start, dataChan, mockClient)
@@ -31,13 +34,21 @@ func TestEthParallelWorkerParallelDo(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, &mockData, result)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	// test rpc error
+	var buf bytes.Buffer
+	logrus.SetOutput(&buf)
+	logrus.SetFormatter(&logrus.TextFormatter{
+		DisableTimestamp: true,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
 	defer cancel()
 
 	result, err = worker.ParallelDo(ctx, 0, 1)
 	assert.Error(t, err)
 	assert.Equal(t, ctx.Err(), err)
 	assert.Nil(t, result)
+	assert.Contains(t, buf.String(), "rpc error")
 
 	mockClient.AssertExpectations(t)
 }

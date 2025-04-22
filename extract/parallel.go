@@ -2,7 +2,6 @@ package extract
 
 import (
 	"context"
-	"errors"
 	"sync/atomic"
 	"time"
 
@@ -52,17 +51,20 @@ func NewEthParallelWorker(start uint64, dataChan *EthMemoryBoundedChannel, clien
 
 // ParallelDo implements parallel.Interface.
 func (w *EthParallelWorker) ParallelDo(ctx context.Context, routine int, task int) (*types.EthBlockData, error) {
+	bn := w.start + uint64(task)
 	for {
-		bn := w.start + uint64(task)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		data, err := w.client.BlockBundleByNumber(ctx, ethTypes.BlockNumber(bn))
 		if err == nil {
 			return &data, nil
 		}
-		if errors.Is(err, ctx.Err()) {
-			return nil, err
-		}
-
 		logrus.WithFields(logrus.Fields{
+			"block":   bn,
 			"start":   w.start,
 			"task":    task,
 			"routine": routine,
