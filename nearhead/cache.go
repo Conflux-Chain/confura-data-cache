@@ -289,7 +289,7 @@ func (c *EthCache) GetLogsByBlockRange(fromBlock, toBlock uint64, logFilter Filt
 	}
 
 	// nil returned when not cached
-	if (c.start == c.end) ||
+	if c.start == c.end ||
 		toBlock < c.start ||
 		fromBlock >= c.end {
 		return nil, nil
