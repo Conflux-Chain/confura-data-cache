@@ -22,7 +22,7 @@ func TestEthParallelWorkerParallelDo(t *testing.T) {
 	mockClient := new(MockEthRpcClient)
 	mockClient.On("BlockBundleByNumber", mock.Anything, ethTypes.BlockNumber(100)).Return(mockData, nil)
 	mockClient.On("BlockBundleByNumber", mock.Anything, ethTypes.BlockNumber(101)).
-		Return(types.EthBlockData{}, errors.New("rpc error"))
+		Return(types.EthBlockData{}, context.DeadlineExceeded)
 
 	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
 	worker := NewEthParallelWorker(start, dataChan, mockClient)
@@ -31,8 +31,12 @@ func TestEthParallelWorkerParallelDo(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, &mockData, result)
 
-	result, err = worker.ParallelDo(context.Background(), 0, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
+
+	result, err = worker.ParallelDo(ctx, 0, 1)
 	assert.Error(t, err)
+	assert.Equal(t, ctx.Err(), err)
 	assert.Nil(t, result)
 
 	mockClient.AssertExpectations(t)

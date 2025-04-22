@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/mcuadros/go-defaults"
 	ethTypes "github.com/openweb3/web3go/types"
@@ -353,7 +354,8 @@ func TestEthExtractorCatchUpUntilFinalized(t *testing.T) {
 	c.On("BlockHeaderByNumber", mock.Anything, ethTypes.FinalizedBlockNumber).
 		Return(makeMockBlock(100, "0x100", "0x99"), nil)
 
-	ex := newMockExtractor(EthConfig{Concurrency: 2, StartBlockNumber: 98}, c, nil)
+	conf := EthConfig{SerialOption: parallel.SerialOption{Routines: 2}, StartBlockNumber: 98}
+	ex := newMockExtractor(conf, c, nil)
 	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
 	ex.catchUpUntilFinalized(context.Background(), dataChan)
 
@@ -381,8 +383,10 @@ func TestCatchUpOnce(t *testing.T) {
 		c.On("BlockHeaderByNumber", mock.Anything, ethTypes.FinalizedBlockNumber).
 			Return((*ethTypes.Block)(nil), errors.New("rpc error"))
 
+		conf := EthConfig{SerialOption: parallel.SerialOption{Routines: 2}, StartBlockNumber: 98}
+		ex := newMockExtractor(conf, c, nil)
+
 		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
-		ex := newMockExtractor(EthConfig{Concurrency: 2, StartBlockNumber: 98}, c, nil)
 		err, done := ex.catchUpOnce(context.Background(), dataChan)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "rpc error")
@@ -394,8 +398,10 @@ func TestCatchUpOnce(t *testing.T) {
 		c.On("BlockHeaderByNumber", mock.Anything, ethTypes.FinalizedBlockNumber).
 			Return(&ethTypes.Block{Number: big.NewInt(90)}, nil)
 
+		conf := EthConfig{SerialOption: parallel.SerialOption{Routines: 2}, StartBlockNumber: 98}
+		ex := newMockExtractor(conf, c, nil)
+
 		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
-		ex := newMockExtractor(EthConfig{Concurrency: 2, StartBlockNumber: 98}, c, nil)
 		err, done := ex.catchUpOnce(context.Background(), dataChan)
 		assert.NoError(t, err)
 		assert.True(t, done)

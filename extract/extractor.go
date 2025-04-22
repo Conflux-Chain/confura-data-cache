@@ -3,6 +3,7 @@ package extract
 import (
 	"time"
 
+	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	"github.com/openweb3/go-rpc-provider"
 	"github.com/pkg/errors"
 )
@@ -20,6 +21,9 @@ func NewInconsistentChainDataError(detail string) error {
 }
 
 type Config[T any] struct {
+	// Concurrency options used for catching up to the latest finalized block.
+	parallel.SerialOption
+
 	// TargetBlockNumber is the block number the extractor is catching up to during synchronization.
 	TargetBlockNumber T
 
@@ -41,10 +45,6 @@ type Config[T any] struct {
 
 	// PollInterval specifies how often to poll for new blocks during normal, steady-state operation.
 	PollInterval time.Duration `default:"1s"`
-
-	// Number of concurrent goroutines used for catching up to the latest finalized block.
-	// By default, runtime.GOMAXPROCS(0) is used.
-	Concurrency int
 }
 
 // EthConfig is a Config specialization for Ethereum-compatible blockchains.

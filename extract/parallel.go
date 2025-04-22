@@ -2,11 +2,14 @@ package extract
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
+	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	ethTypes "github.com/openweb3/web3go/types"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -48,11 +51,22 @@ func NewEthParallelWorker(start uint64, dataChan *EthMemoryBoundedChannel, clien
 }
 
 // ParallelDo implements parallel.Interface.
-func (w *EthParallelWorker) ParallelDo(ctx context.Context, routine int, task int) (v *types.EthBlockData, err error) {
-	bn := w.start + uint64(task)
-	data, err := w.client.BlockBundleByNumber(ctx, ethTypes.BlockNumber(bn))
-	if err != nil {
-		return nil, err
+func (w *EthParallelWorker) ParallelDo(ctx context.Context, routine int, task int) (*types.EthBlockData, error) {
+	for {
+		bn := w.start + uint64(task)
+		data, err := w.client.BlockBundleByNumber(ctx, ethTypes.BlockNumber(bn))
+		if err == nil {
+			return &data, nil
+		}
+		if errors.Is(err, ctx.Err()) {
+			return nil, err
+		}
+
+		logrus.WithFields(logrus.Fields{
+			"start":   w.start,
+			"task":    task,
+			"routine": routine,
+		}).WithError(err).Info("EthParallelWorker failed to get block bundle")
+		time.Sleep(time.Second)
 	}
-	return &data, nil
 }

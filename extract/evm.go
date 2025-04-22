@@ -154,16 +154,14 @@ func (e *EthExtractor) catchUpOnce(ctx context.Context, dataChan *EthMemoryBound
 	}
 
 	finalizedBlockNumber := latestFinalizedBlock.Number.Uint64()
-	if e.StartBlockNumber >= finalizedBlockNumber {
+	if e.StartBlockNumber > finalizedBlockNumber {
 		return nil, true
 	}
 
 	worker := NewEthParallelWorker(e.StartBlockNumber, dataChan, e.rpcClient)
 	numTasks := finalizedBlockNumber - e.StartBlockNumber + 1
 
-	err = parallel.Serial(ctx, worker, int(numTasks), parallel.SerialOption{
-		Routines: e.Concurrency, Window: 1,
-	})
+	err = parallel.Serial(ctx, worker, int(numTasks), e.SerialOption)
 	e.StartBlockNumber += worker.NumCollected()
 	if err != nil {
 		return err, false
