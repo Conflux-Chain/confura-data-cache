@@ -279,16 +279,19 @@ func (c *EthCache) GetTransactionTraces(txHash common.Hash) []ethTypes.Localized
 // GetLogsByBlockRange returns logs matching given filter parameters.
 // nil returned when not cached.
 // empty logs returned when not exists.
-func (c *EthCache) GetLogsByBlockRange(fromBlock, toBlock uint64, logFilter LogFilterOpt) *EthLogs {
+func (c *EthCache) GetLogsByBlockRange(fromBlock, toBlock uint64, logFilter FilterOpt) (*EthLogs, error) {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
+
+	if fromBlock > toBlock {
+		return nil, errors.New("invalid block range params")
+	}
 
 	// nil returned when not cached
 	if (c.start == c.end) ||
 		(fromBlock < c.start && toBlock < c.start) ||
-		(fromBlock >= c.end && toBlock >= c.end) ||
-		(fromBlock > toBlock) {
-		return nil
+		(fromBlock >= c.end && toBlock >= c.end) {
+		return nil, nil
 	}
 
 	// contract address filter
@@ -320,17 +323,19 @@ func (c *EthCache) GetLogsByBlockRange(fromBlock, toBlock uint64, logFilter LogF
 		FromBlock: from,
 		ToBlock:   to,
 		Logs:      logs,
-	}
+	}, nil
 }
 
 // GetLogsByBlockHash returns logs matching given filter parameters.
-func (c *EthCache) GetLogsByBlockHash(blockHash common.Hash, logFilter LogFilterOpt) *EthLogs {
+// nil returned when not cached.
+// empty logs returned when not exists.
+func (c *EthCache) GetLogsByBlockHash(blockHash common.Hash, logFilter FilterOpt) (*EthLogs, error) {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
 	blockNumber, exists := c.blockHash2BlockNumbers[blockHash]
 	if !exists {
-		return nil
+		return nil, nil
 	}
 
 	return c.GetLogsByBlockRange(blockNumber, blockNumber, logFilter)
@@ -368,8 +373,8 @@ type TransactionIndex struct {
 	transactionIndex uint64
 }
 
-// LogFilterOpt contains options for contract log filtering.
-type LogFilterOpt struct {
+// FilterOpt contains options for contract log filtering.
+type FilterOpt struct {
 	Addresses []common.Address
 	Topics    [][]common.Hash
 }

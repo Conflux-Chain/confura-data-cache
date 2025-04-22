@@ -419,14 +419,6 @@ func TestEthCache_Sizeof(t *testing.T) {
 func TestEthCache_GetLogs(t *testing.T) {
 	cache := createTestCache()
 
-	// no block datas in cache
-	blockHash := common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e8")
-	logFilter1 := FilterQuery{
-		BlockHash: &blockHash,
-	}
-	logs := cache.GetLogs(logFilter1)
-	assert.Nil(t, logs)
-
 	// batch put block datas
 	batchBlocks := 10
 	datas := createTestDataBatch(t, batchBlocks)
@@ -438,105 +430,79 @@ func TestEthCache_GetLogs(t *testing.T) {
 	assert.Less(t, cache.currentSize, cache.config.MaxMemory)
 
 	// block hash filter
-	blockHash = common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e8")
-	logFilter2 := FilterQuery{
-		BlockHash: &blockHash,
-	}
-	logs = cache.GetLogs(logFilter2)
-	assert.Len(t, logs, 3)
-	for _, log := range logs {
+	blockHash := common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e8")
+	logs := cache.GetLogsByBlockHash(blockHash, FilterOpt{})
+	assert.Len(t, logs.Logs, 3)
+	for _, log := range logs.Logs {
 		assert.Equal(t, log.BlockHash, blockHash)
 	}
 
-	// block hash filter that not exists
-	logFilter3 := FilterQuery{
-		BlockHash: &hashNotCached,
-	}
-	logs = cache.GetLogs(logFilter3)
+	// block hash filter -- not cached
+	logs = cache.GetLogsByBlockHash(hashNotCached, FilterOpt{})
 	assert.Nil(t, logs)
 
-	// blockHash and from/to block number are present in the filter criteria at the same time
-	blockHash = common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e8")
-	fromBlock := uint64(120177557)
+	// block range filter
+	fromBlock := uint64(120177555)
 	toBlock := uint64(120177557)
-	logFilter4 := FilterQuery{
-		BlockHash: &blockHash,
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
-	}
-	logs = cache.GetLogs(logFilter4)
-	assert.Nil(t, logs)
-
-	// from / to block filter
-	fromBlock = uint64(120177557)
-	toBlock = uint64(120177559)
-	logFilter5 := FilterQuery{
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
-	}
-	logs = cache.GetLogs(logFilter5)
-	assert.Len(t, logs, 9)
-	for _, log := range logs {
+	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Len(t, logs.Logs, 9)
+	assert.Equal(t, logs.FromBlock, fromBlock)
+	assert.Equal(t, logs.ToBlock, toBlock)
+	for _, log := range logs.Logs {
 		assert.GreaterOrEqual(t, log.BlockNumber, fromBlock)
 		assert.LessOrEqual(t, log.BlockNumber, toBlock)
 	}
 
-	// from / to block filter exceeds cache range
-	fromBlock = uint64(120177555)
-	toBlock = uint64(120177555 + batchBlocks)
-	logFilter6 := FilterQuery{
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
+	// block range filter -- from block greater than cache.start
+	fromBlock = uint64(120177557)
+	toBlock = uint64(120177559)
+	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Len(t, logs.Logs, 9)
+	assert.Equal(t, logs.FromBlock, fromBlock)
+	assert.Equal(t, logs.ToBlock, toBlock)
+	for _, log := range logs.Logs {
+		assert.GreaterOrEqual(t, log.BlockNumber, fromBlock)
+		assert.LessOrEqual(t, log.BlockNumber, toBlock)
 	}
-	logs = cache.GetLogs(logFilter6)
+
+	// block range filter -- not cached
+	fromBlock = uint64(120177550)
+	toBlock = uint64(120177552)
+	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
 	assert.Nil(t, logs)
 
-	// from block number greater than to block number
-	fromBlock = uint64(120177558)
-	toBlock = uint64(120177556)
-	logFilter7 := FilterQuery{
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
-	}
-	logs = cache.GetLogs(logFilter7)
-	assert.Nil(t, logs)
-
-	// contract addresses filter contains one contract
+	// addresses filter -- one contract
 	fromBlock = uint64(120177557)
 	toBlock = uint64(120177559)
 	addresses := []common.Address{
 		common.HexToAddress("0xfe97e85d13abd9c1c33384e796f10b73905637ce"),
 	}
-	logFilter8 := FilterQuery{
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
+	filter := FilterOpt{
 		Addresses: addresses,
 	}
-	logs = cache.GetLogs(logFilter8)
-	assert.Len(t, logs, 6)
-	for _, log := range logs {
+	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Len(t, logs.Logs, 6)
+	for _, log := range logs.Logs {
 		assert.Contains(t, addresses, log.Address)
 	}
 
-	// contract addresses filter contains two contract
+	// addresses filter -- two contract
 	fromBlock = uint64(120177557)
 	toBlock = uint64(120177559)
 	addresses = []common.Address{
 		common.HexToAddress("0xfe97e85d13abd9c1c33384e796f10b73905637ce"),
 		common.HexToAddress("0x25ab3efd52e6470681ce037cd546dc60726948d3"),
 	}
-	logFilter9 := FilterQuery{
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
+	filter = FilterOpt{
 		Addresses: addresses,
 	}
-	logs = cache.GetLogs(logFilter9)
-	assert.Len(t, logs, 9)
-	for _, log := range logs {
+	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Len(t, logs.Logs, 9)
+	for _, log := range logs.Logs {
 		assert.Contains(t, addresses, log.Address)
 	}
 
-	// topic0 filter
+	// topic filter -- topic0
 	fromBlock = uint64(120177557)
 	toBlock = uint64(120177559)
 	addresses = []common.Address{
@@ -551,19 +517,17 @@ func TestEthCache_GetLogs(t *testing.T) {
 	topics := [][]common.Hash{
 		topics0,
 	}
-	logFilter10 := FilterQuery{
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
+	filter = FilterOpt{
 		Addresses: addresses,
 		Topics:    topics,
 	}
-	logs = cache.GetLogs(logFilter10)
-	assert.Len(t, logs, 9)
-	for _, log := range logs {
+	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Len(t, logs.Logs, 9)
+	for _, log := range logs.Logs {
 		assert.Contains(t, topics0, log.Topics[0])
 	}
 
-	// topic1 filter
+	// topic filter -- topic1
 	fromBlock = uint64(120177557)
 	toBlock = uint64(120177559)
 	addresses = []common.Address{
@@ -578,19 +542,17 @@ func TestEthCache_GetLogs(t *testing.T) {
 		{},
 		topics1,
 	}
-	logFilter11 := FilterQuery{
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
+	filter = FilterOpt{
 		Addresses: addresses,
 		Topics:    topics,
 	}
-	logs = cache.GetLogs(logFilter11)
-	assert.Len(t, logs, 9)
-	for _, log := range logs {
+	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Len(t, logs.Logs, 9)
+	for _, log := range logs.Logs {
 		assert.Contains(t, topics1, log.Topics[1])
 	}
 
-	// topic2 filter
+	// topic filter -- topic2
 	fromBlock = uint64(120177557)
 	toBlock = uint64(120177559)
 	addresses = []common.Address{
@@ -604,19 +566,17 @@ func TestEthCache_GetLogs(t *testing.T) {
 		{},
 		topics2,
 	}
-	logFilter12 := FilterQuery{
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
+	filter = FilterOpt{
 		Addresses: addresses,
 		Topics:    topics,
 	}
-	logs = cache.GetLogs(logFilter12)
-	assert.Len(t, logs, 6)
-	for _, log := range logs {
+	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Len(t, logs.Logs, 6)
+	for _, log := range logs.Logs {
 		assert.Contains(t, topics2, log.Topics[2])
 	}
 
-	// topic0 and topic2 filter
+	// topic filter -- topic0 && topic2
 	fromBlock = uint64(120177557)
 	toBlock = uint64(120177559)
 	addresses = []common.Address{
@@ -634,15 +594,13 @@ func TestEthCache_GetLogs(t *testing.T) {
 		{},
 		topics2,
 	}
-	logFilter13 := FilterQuery{
-		FromBlock: &fromBlock,
-		ToBlock:   &toBlock,
+	filter = FilterOpt{
 		Addresses: addresses,
 		Topics:    topics,
 	}
-	logs = cache.GetLogs(logFilter13)
-	assert.Len(t, logs, 3)
-	for _, log := range logs {
+	logs = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Len(t, logs.Logs, 3)
+	for _, log := range logs.Logs {
 		assert.Contains(t, topics0, log.Topics[0])
 		assert.Contains(t, topics2, log.Topics[2])
 	}
