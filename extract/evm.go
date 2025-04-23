@@ -50,7 +50,7 @@ func (p *Web3ClientAdapter) BlockBundleByNumber(ctx context.Context, bn ethTypes
 	startAt := time.Now()
 	data, err := types.QueryEthBlockData(p.client.WithContext(ctx), uint64(bn))
 
-	ethMetrics.Latency(err == nil).Update(int64(time.Since(startAt)))
+	ethMetrics.Latency(err == nil).Update(time.Since(startAt).Nanoseconds())
 	ethMetrics.Availability().Mark(err == nil)
 	return data, err
 }
