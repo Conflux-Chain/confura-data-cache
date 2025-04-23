@@ -57,8 +57,15 @@ func createTestDataBatch(t *testing.T, size int) []types.EthBlockData {
 		data := createTestData(t)
 		data.Block.Number = incrNumber(data.Block.Number, int64(i))
 		data.Block.Hash = incrHash(data.Block.Hash, int64(i))
-		for _, tx := range data.Block.Transactions.Transactions() {
+		receipts := data.Receipts
+		for i, tx := range data.Block.Transactions.Transactions() {
 			tx.Hash = incrHash(tx.Hash, int64(i))
+			receipt := receipts[i]
+			for _, log := range receipt.Logs {
+				log.BlockNumber = data.Block.Number.Uint64()
+				log.BlockHash = data.Block.Hash
+				log.TxHash = tx.Hash
+			}
 		}
 		datas = append(datas, *data)
 	}
@@ -407,4 +414,218 @@ func TestEthCache_Sizeof(t *testing.T) {
 	blockSize := size.Of(block)
 	assert.Greater(t, blockSize, estimate)
 	assert.Less(t, blockSize, 3000)
+}
+
+func TestEthCache_GetLogs(t *testing.T) {
+	cache := createTestCache()
+
+	// batch put block datas
+	batchBlocks := 10
+	datas := createTestDataBatch(t, batchBlocks)
+	for _, data := range datas {
+		assert.Nil(t, cache.Put(&data))
+	}
+	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
+	assert.Greater(t, cache.currentSize, uint64(0))
+	assert.Less(t, cache.currentSize, cache.config.MaxMemory)
+
+	// block hash filter
+	blockHash := common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e8")
+	logs, err := cache.GetLogsByBlockHash(blockHash, FilterOpt{})
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 3)
+	for _, log := range logs.Logs {
+		assert.Equal(t, log.BlockHash, blockHash)
+	}
+
+	// block hash filter -- not cached
+	logs, err = cache.GetLogsByBlockHash(hashNotCached, FilterOpt{})
+	assert.Nil(t, err)
+	assert.Nil(t, logs)
+
+	// block range filter
+	fromBlock := uint64(120177555)
+	toBlock := uint64(120177557)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 9)
+	assert.Equal(t, logs.FromBlock, fromBlock)
+	assert.Equal(t, logs.ToBlock, toBlock)
+	for _, log := range logs.Logs {
+		assert.GreaterOrEqual(t, log.BlockNumber, fromBlock)
+		assert.LessOrEqual(t, log.BlockNumber, toBlock)
+	}
+
+	// block range filter -- from block greater than cache.start
+	fromBlock = uint64(120177557)
+	toBlock = uint64(120177559)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 9)
+	assert.Equal(t, logs.FromBlock, fromBlock)
+	assert.Equal(t, logs.ToBlock, toBlock)
+	for _, log := range logs.Logs {
+		assert.GreaterOrEqual(t, log.BlockNumber, fromBlock)
+		assert.LessOrEqual(t, log.BlockNumber, toBlock)
+	}
+
+	// block range filter -- to block greater than cache.end
+	fromBlock = uint64(120177555+batchBlocks) - 3
+	toBlock = uint64(120177555 + batchBlocks)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 9)
+	assert.Equal(t, logs.FromBlock, fromBlock)
+	assert.Equal(t, logs.ToBlock, toBlock-1)
+	for _, log := range logs.Logs {
+		assert.GreaterOrEqual(t, log.BlockNumber, fromBlock)
+		assert.LessOrEqual(t, log.BlockNumber, toBlock)
+	}
+
+	// block range filter -- not cached
+	fromBlock = uint64(120177550)
+	toBlock = uint64(120177552)
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, FilterOpt{})
+	assert.Nil(t, err)
+	assert.Nil(t, logs)
+
+	// addresses filter -- one contract
+	fromBlock = uint64(120177557)
+	toBlock = uint64(120177559)
+	addresses := []common.Address{
+		common.HexToAddress("0xfe97e85d13abd9c1c33384e796f10b73905637ce"),
+	}
+	filter := FilterOpt{
+		Addresses: addresses,
+	}
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 6)
+	for _, log := range logs.Logs {
+		assert.Contains(t, addresses, log.Address)
+	}
+
+	// addresses filter -- two contract
+	fromBlock = uint64(120177557)
+	toBlock = uint64(120177559)
+	addresses = []common.Address{
+		common.HexToAddress("0xfe97e85d13abd9c1c33384e796f10b73905637ce"),
+		common.HexToAddress("0x25ab3efd52e6470681ce037cd546dc60726948d3"),
+	}
+	filter = FilterOpt{
+		Addresses: addresses,
+	}
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 9)
+	for _, log := range logs.Logs {
+		assert.Contains(t, addresses, log.Address)
+	}
+
+	// topic filter -- topic0
+	fromBlock = uint64(120177557)
+	toBlock = uint64(120177559)
+	addresses = []common.Address{
+		common.HexToAddress("0xfe97e85d13abd9c1c33384e796f10b73905637ce"),
+		common.HexToAddress("0x25ab3efd52e6470681ce037cd546dc60726948d3"),
+	}
+	topics0 := []common.Hash{
+		common.HexToHash("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"),
+		common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"),
+		common.HexToHash("0x8d92c805c252261fcfff21ee60740eb8a38922469a7e6ee396976d57c22fc1c9"),
+	}
+	topics := [][]common.Hash{
+		topics0,
+	}
+	filter = FilterOpt{
+		Addresses: addresses,
+		Topics:    topics,
+	}
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 9)
+	for _, log := range logs.Logs {
+		assert.Contains(t, topics0, log.Topics[0])
+	}
+
+	// topic filter -- topic1
+	fromBlock = uint64(120177557)
+	toBlock = uint64(120177559)
+	addresses = []common.Address{
+		common.HexToAddress("0xfe97e85d13abd9c1c33384e796f10b73905637ce"),
+		common.HexToAddress("0x25ab3efd52e6470681ce037cd546dc60726948d3"),
+	}
+	topics1 := []common.Hash{
+		common.HexToHash("0x0000000000000000000000002d26b1202078e49d036d59451f0da60f645e6df6"),
+		common.HexToHash("0x0101984d4c90c00000000000a1d3ec8d000034433d0067f515ec02ca2201f722"),
+	}
+	topics = [][]common.Hash{
+		{},
+		topics1,
+	}
+	filter = FilterOpt{
+		Addresses: addresses,
+		Topics:    topics,
+	}
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 9)
+	for _, log := range logs.Logs {
+		assert.Contains(t, topics1, log.Topics[1])
+	}
+
+	// topic filter -- topic2
+	fromBlock = uint64(120177557)
+	toBlock = uint64(120177559)
+	addresses = []common.Address{
+		common.HexToAddress("0xfe97e85d13abd9c1c33384e796f10b73905637ce"),
+	}
+	topics2 := []common.Hash{
+		common.HexToHash("0x00000000000000000000000025ab3efd52e6470681ce037cd546dc60726948d3"),
+	}
+	topics = [][]common.Hash{
+		{},
+		{},
+		topics2,
+	}
+	filter = FilterOpt{
+		Addresses: addresses,
+		Topics:    topics,
+	}
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 6)
+	for _, log := range logs.Logs {
+		assert.Contains(t, topics2, log.Topics[2])
+	}
+
+	// topic filter -- topic0 && topic2
+	fromBlock = uint64(120177557)
+	toBlock = uint64(120177559)
+	addresses = []common.Address{
+		common.HexToAddress("0xfe97e85d13abd9c1c33384e796f10b73905637ce"),
+		common.HexToAddress("0x25ab3efd52e6470681ce037cd546dc60726948d3"),
+	}
+	topics0 = []common.Hash{
+		common.HexToHash("0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"),
+	}
+	topics2 = []common.Hash{
+		common.HexToHash("0x00000000000000000000000025ab3efd52e6470681ce037cd546dc60726948d3"),
+	}
+	topics = [][]common.Hash{
+		topics0,
+		{},
+		topics2,
+	}
+	filter = FilterOpt{
+		Addresses: addresses,
+		Topics:    topics,
+	}
+	logs, err = cache.GetLogsByBlockRange(fromBlock, toBlock, filter)
+	assert.Nil(t, err)
+	assert.Len(t, logs.Logs, 3)
+	for _, log := range logs.Logs {
+		assert.Contains(t, topics0, log.Topics[0])
+		assert.Contains(t, topics2, log.Topics[2])
+	}
 }
