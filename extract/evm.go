@@ -47,7 +47,12 @@ func (p *Web3ClientAdapter) BlockHeaderByNumber(ctx context.Context, bn ethTypes
 
 // BlockBundleByNumber retrieves a full block bundle including associated data.
 func (p *Web3ClientAdapter) BlockBundleByNumber(ctx context.Context, bn ethTypes.BlockNumber) (types.EthBlockData, error) {
-	return types.QueryEthBlockData(p.client.WithContext(ctx), uint64(bn))
+	startAt := time.Now()
+	data, err := types.QueryEthBlockData(p.client.WithContext(ctx), uint64(bn))
+
+	ethMetrics.Latency(err == nil).Update(time.Since(startAt).Nanoseconds())
+	ethMetrics.Availability().Mark(err == nil)
+	return data, err
 }
 
 func newEthFinalizedHeightProvider(c EthRpcClient) FinalizedHeightProvider {
@@ -61,9 +66,6 @@ func newEthFinalizedHeightProvider(c EthRpcClient) FinalizedHeightProvider {
 }
 
 // EthExtractor is an EVM compatible blockchain data extractor.
-// TODO:
-// - add metrics, logging and monitoring
-// - add graceful shutdown to ensure data consistency
 type EthExtractor struct {
 	EthConfig
 
@@ -117,6 +119,7 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChan
 
 		blockData, caughtUp, err := e.extractOnce(ctx)
 		if err == nil && blockData != nil {
+			ethMetrics.DataSize().Update(int64(blockData.Size()))
 			dataChan.Send(blockData)
 		}
 
@@ -172,6 +175,8 @@ func (e *EthExtractor) catchUpOnce(ctx context.Context, dataChan *EthMemoryBound
 
 // extractOnce fetches the block data for the current block number.
 func (e *EthExtractor) extractOnce(ctx context.Context) (*types.EthBlockData, bool, error) {
+	startAt := time.Now()
+
 	// Get the alignment block header to determine the actual target block number to synchronize against.
 	targetBlock, err := e.rpcClient.BlockHeaderByNumber(ctx, e.TargetBlockNumber)
 	if err != nil {
@@ -224,5 +229,7 @@ func (e *EthExtractor) extractOnce(ctx context.Context) (*types.EthBlockData, bo
 	}
 
 	e.StartBlockNumber++
+	ethMetrics.Qps().UpdateSince(startAt)
+
 	return &blockData, false, nil
 }
