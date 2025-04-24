@@ -5,14 +5,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/sirupsen/logrus"
 )
 
 var (
-	_ parallel.Interface[*types.EthBlockData] = (*EthParallelWorker)(nil)
+	_ parallel.Interface[*EthReorgAwareBlockData] = (*EthParallelWorker)(nil)
 )
 
 type ParallelWorker[T Sizable] struct {
@@ -35,13 +34,13 @@ func (w *ParallelWorker[T]) ParallelCollect(ctx context.Context, result *paralle
 }
 
 type EthParallelWorker struct {
-	ParallelWorker[*types.EthBlockData]
+	ParallelWorker[*EthReorgAwareBlockData]
 	client EthRpcClient
 }
 
 func NewEthParallelWorker(start uint64, dataChan *EthMemoryBoundedChannel, client EthRpcClient) *EthParallelWorker {
 	return &EthParallelWorker{
-		ParallelWorker: ParallelWorker[*types.EthBlockData]{
+		ParallelWorker: ParallelWorker[*EthReorgAwareBlockData]{
 			start:    start,
 			dataChan: dataChan,
 		},
@@ -50,7 +49,7 @@ func NewEthParallelWorker(start uint64, dataChan *EthMemoryBoundedChannel, clien
 }
 
 // ParallelDo implements parallel.Interface.
-func (w *EthParallelWorker) ParallelDo(ctx context.Context, routine int, task int) (*types.EthBlockData, error) {
+func (w *EthParallelWorker) ParallelDo(ctx context.Context, routine int, task int) (*EthReorgAwareBlockData, error) {
 	bn := w.start + uint64(task)
 	for {
 		select {
@@ -61,7 +60,7 @@ func (w *EthParallelWorker) ParallelDo(ctx context.Context, routine int, task in
 
 		data, err := w.client.BlockBundleByNumber(ctx, ethTypes.BlockNumber(bn))
 		if err == nil {
-			return &data, nil
+			return NewEthReorgAwareBlockData(&data), nil
 		}
 		logrus.WithFields(logrus.Fields{
 			"block":   bn,

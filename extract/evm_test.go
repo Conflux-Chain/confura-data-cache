@@ -74,9 +74,15 @@ func TestEvmExtractIntegration(t *testing.T) {
 
 	data := dataChan.Receive()
 	assert.NotNil(t, data)
-	assert.NotNil(t, data.Block)
-	assert.NotNil(t, data.Receipts)
-	assert.NotNil(t, data.Traces)
+	reorgHeight, isReorg := data.ReorgHeight()
+	assert.False(t, isReorg)
+	assert.Zero(t, reorgHeight)
+
+	blockData, isData := data.BlockData()
+	assert.True(t, isData)
+	assert.NotNil(t, blockData.Block)
+	assert.NotNil(t, blockData.Receipts)
+	assert.NotNil(t, blockData.Traces)
 }
 
 func TestNewEvmExtractor(t *testing.T) {
@@ -141,12 +147,13 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 	block := makeMockBlock(100, "0x100", "0x99")
 
 	tests := []struct {
-		name    string
-		setup   func(*MockEthRpcClient)
-		cfg     EthConfig
-		cache   *BlockHashCache
-		wantErr string
-		caught  bool
+		name        string
+		setup       func(*MockEthRpcClient)
+		cfg         EthConfig
+		cache       *BlockHashCache
+		wantErr     string
+		caught      bool
+		resultCheck func(result *EthReorgAwareBlockData)
 	}{
 		{
 			"TargetBlockError",
@@ -157,6 +164,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			nil,
 			"failed to get target block",
 			false,
+			nil,
 		},
 		{
 			"NilTargetBlock",
@@ -167,6 +175,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			nil,
 			"not found",
 			false,
+			nil,
 		},
 		{
 			"CaughtUp",
@@ -177,6 +186,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			nil,
 			"",
 			true,
+			nil,
 		},
 		{
 			"BlockBundleError",
@@ -188,6 +198,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			nil,
 			"failed to fetch block data",
 			false,
+			nil,
 		},
 		{
 			"VerifyError",
@@ -204,6 +215,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			nil,
 			"inconsistent chain data",
 			false,
+			nil,
 		},
 		{
 			"ReorgDetected",
@@ -220,6 +232,16 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			}(),
 			"reorg detected",
 			false,
+			func(result *EthReorgAwareBlockData) {
+				assert.NotNil(t, result)
+				reorgHeight, ok := result.ReorgHeight()
+				assert.True(t, ok)
+				assert.Equal(t, uint64(98), reorgHeight)
+				assert.Zero(t, result.Size())
+				blockData, ok := result.BlockData()
+				assert.False(t, ok)
+				assert.Nil(t, blockData)
+			},
 		},
 		{
 			"ReorgCheckSkipped",
@@ -233,6 +255,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			NewBlockHashCache(0),
 			"",
 			false,
+			nil,
 		},
 		{
 			"HashCacheAppendError",
@@ -250,6 +273,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			}(),
 			"block number not continuous",
 			false,
+			nil,
 		},
 		{
 			"Ok",
@@ -267,6 +291,16 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			}(),
 			"",
 			false,
+			func(result *EthReorgAwareBlockData) {
+				assert.NotNil(t, result)
+				reorgHeight, ok := result.ReorgHeight()
+				assert.False(t, ok)
+				assert.Equal(t, uint64(0), reorgHeight)
+				assert.NotZero(t, result.Size())
+				blockData, ok := result.BlockData()
+				assert.True(t, ok)
+				assert.NotNil(t, blockData)
+			},
 		},
 	}
 
@@ -275,13 +309,17 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			c := new(MockEthRpcClient)
 			tc.setup(c)
 			ex := newMockExtractor(tc.cfg, c, tc.cache)
-			_, caughtUp, err := ex.extractOnce(ctx)
+			result, caughtUp, err := ex.extractOnce(ctx)
 			if tc.wantErr != "" {
 				assert.ErrorContains(t, err, tc.wantErr)
 			} else {
 				assert.NoError(t, err)
 			}
 			assert.Equal(t, tc.caught, caughtUp)
+
+			if tc.resultCheck != nil {
+				tc.resultCheck(result)
+			}
 		})
 	}
 }
@@ -328,7 +366,7 @@ func TestEthExtractorStart(t *testing.T) {
 		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
 		go ex.Start(ctx, dataChan)
 
-		resultChan := make(chan *types.EthBlockData)
+		resultChan := make(chan *EthReorgAwareBlockData)
 		go func() {
 			resultChan <- dataChan.Receive()
 		}()
@@ -336,7 +374,10 @@ func TestEthExtractorStart(t *testing.T) {
 		select {
 		case data := <-resultChan:
 			assert.NotNil(t, data)
-			assert.Equal(t, uint64(100), data.Block.Number.Uint64())
+			blockData, ok := data.BlockData()
+			assert.True(t, ok)
+			assert.NotNil(t, blockData)
+			assert.Equal(t, uint64(100), blockData.Block.Number.Uint64())
 		case <-time.After(100 * time.Millisecond):
 			t.Fatal("Timed out waiting for block data")
 		}
@@ -355,12 +396,12 @@ func TestEthExtractorCatchUpUntilFinalized(t *testing.T) {
 		Return(makeMockBlock(100, "0x100", "0x99"), nil)
 
 	conf := EthConfig{SerialOption: parallel.SerialOption{Routines: 2}, StartBlockNumber: 98}
-	ex := newMockExtractor(conf, c, nil)
+	ex := newMockExtractor(conf, c, NewBlockHashCache(0))
 	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
 	ex.catchUpUntilFinalized(context.Background(), dataChan)
 
 	for i := 98; i <= 100; i++ {
-		resultChan := make(chan *types.EthBlockData)
+		resultChan := make(chan *EthReorgAwareBlockData)
 		go func() {
 			resultChan <- dataChan.Receive()
 		}()
@@ -368,7 +409,10 @@ func TestEthExtractorCatchUpUntilFinalized(t *testing.T) {
 		select {
 		case data := <-resultChan:
 			assert.NotNil(t, data)
-			assert.Equal(t, uint64(i), data.Block.Number.Uint64())
+			blockData, ok := data.BlockData()
+			assert.True(t, ok)
+			assert.NotNil(t, blockData)
+			assert.Equal(t, uint64(i), blockData.Block.Number.Uint64())
 		case <-time.After(100 * time.Millisecond):
 			close(resultChan)
 			t.Fatal("Timed out waiting for block data")

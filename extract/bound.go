@@ -3,6 +3,7 @@ package extract
 import (
 	"container/list"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 )
@@ -10,6 +11,40 @@ import (
 // Sizable represents types that report their memory footprint.
 type Sizable interface {
 	Size() uint64
+}
+
+// ReorgAwareBlockData wraps a block data with reorg information.
+type ReorgAwareBlockData[T Sizable] struct {
+	blockData   T
+	reorgHeight *uint64
+	cachedSize  atomic.Uint64
+}
+
+func (r *ReorgAwareBlockData[T]) ReorgHeight() (uint64, bool) {
+	if r.reorgHeight != nil {
+		return *r.reorgHeight, true
+	}
+	return 0, false
+}
+
+func (r *ReorgAwareBlockData[T]) BlockData() (v T, ok bool) {
+	if r.reorgHeight != nil {
+		return
+	}
+	return r.blockData, true
+}
+
+func (r *ReorgAwareBlockData[T]) Size() uint64 {
+	if r.reorgHeight != nil {
+		return 0
+	}
+	if v := r.cachedSize.Load(); v != 0 {
+		return v
+	}
+
+	size := r.blockData.Size()
+	r.cachedSize.Store(size)
+	return size
 }
 
 // MemoryBoundedChannel wraps a memory-bounded channel.
@@ -143,9 +178,20 @@ func (m *MemoryBoundedChannel[T]) dequeue() T {
 	return item
 }
 
+// Convenience alias for Eth ReorgAwareBlockData.
+type EthReorgAwareBlockData = ReorgAwareBlockData[*types.EthBlockData]
+
+func NewEthReorgAwareBlockData(blockData *types.EthBlockData) *EthReorgAwareBlockData {
+	return &EthReorgAwareBlockData{blockData: blockData}
+}
+
+func NewEthReorgAwareBlockDataWithHeight(reorgHeight uint64) *EthReorgAwareBlockData {
+	return &EthReorgAwareBlockData{reorgHeight: &reorgHeight}
+}
+
 // Convenience alias for EthBlockData channels.
-type EthMemoryBoundedChannel = MemoryBoundedChannel[*types.EthBlockData]
+type EthMemoryBoundedChannel = MemoryBoundedChannel[*EthReorgAwareBlockData]
 
 func NewEthMemoryBoundedChannel(capacity uint64) *EthMemoryBoundedChannel {
-	return NewMemoryBoundedChannel[*types.EthBlockData](capacity)
+	return NewMemoryBoundedChannel[*EthReorgAwareBlockData](capacity)
 }
