@@ -48,7 +48,11 @@ func validateLeveldb(*cobra.Command, []string) {
 	fatalOnErr(err, "Failed to create tmp dir")
 	defer os.RemoveAll(path)
 
-	store, err := leveldb.NewStore(path, blockFrom)
+	config := leveldb.Config{
+		Path:                   path,
+		DefaultNextBlockNumber: blockFrom,
+	}
+	store, err := leveldb.NewStore(config)
 	fatalOnErr(err, "Failed to create store")
 	defer store.Close()
 

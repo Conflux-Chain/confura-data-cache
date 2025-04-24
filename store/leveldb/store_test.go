@@ -15,7 +15,14 @@ func createTestStore(t *testing.T, defaultNextBlockNumber ...uint64) (*Store, fu
 	path, err := os.MkdirTemp("", "confura-data-cache-")
 	assert.Nil(t, err)
 
-	store, err := NewStore(path, defaultNextBlockNumber...)
+	config := Config{
+		Path: path,
+	}
+	if len(defaultNextBlockNumber) > 0 {
+		config.DefaultNextBlockNumber = defaultNextBlockNumber[0]
+	}
+
+	store, err := NewStore(config)
 	assert.Nil(t, err)
 
 	return store, func() {
@@ -127,7 +134,7 @@ func TestStoreBreakPoint(t *testing.T) {
 	path, err := os.MkdirTemp("", "confura-data-cache-")
 	assert.Nil(t, err)
 
-	store, err := NewStore(path, 7)
+	store, err := NewStore(Config{path, 7})
 	assert.Nil(t, err)
 	assert.Equal(t, uint64(7), store.NextBlockNumber())
 
@@ -139,7 +146,7 @@ func TestStoreBreakPoint(t *testing.T) {
 	assert.Nil(t, store.Close())
 
 	// reopen db again
-	store, err = NewStore(path)
+	store, err = NewStore(Config{path, 0})
 	assert.Nil(t, err)
 
 	// earlist block is 7
