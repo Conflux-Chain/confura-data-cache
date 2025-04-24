@@ -117,10 +117,10 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChan
 		default:
 		}
 
-		blockData, caughtUp, err := e.extractOnce(ctx)
-		if err == nil && blockData != nil {
-			ethMetrics.DataSize().Update(int64(blockData.Size()))
-			dataChan.Send(blockData)
+		resultData, caughtUp, err := e.extractOnce(ctx)
+		if resultData != nil {
+			ethMetrics.DataSize().Update(int64(resultData.Size()))
+			dataChan.Send(resultData)
 		}
 
 		if err != nil || caughtUp {
@@ -145,6 +145,7 @@ func (e *EthExtractor) catchUpUntilFinalized(ctx context.Context, dataChan *EthM
 			continue
 		}
 		if done {
+			e.hashCache.Flush()
 			return
 		}
 	}
@@ -174,7 +175,7 @@ func (e *EthExtractor) catchUpOnce(ctx context.Context, dataChan *EthMemoryBound
 }
 
 // extractOnce fetches the block data for the current block number.
-func (e *EthExtractor) extractOnce(ctx context.Context) (*types.EthBlockData, bool, error) {
+func (e *EthExtractor) extractOnce(ctx context.Context) (*EthReorgAwareBlockData, bool, error) {
 	startAt := time.Now()
 
 	// Get the alignment block header to determine the actual target block number to synchronize against.
@@ -211,7 +212,7 @@ func (e *EthExtractor) extractOnce(ctx context.Context) (*types.EthBlockData, bo
 			detail := fmt.Sprintf(
 				"reorg detected: expected parent hash %s, got %s", bh, blockData.Block.ParentHash,
 			)
-			return nil, false, NewInconsistentChainDataError(detail)
+			return NewEthReorgAwareBlockDataWithHeight(bn), false, NewInconsistentChainDataError(detail)
 		}
 	} else {
 		// TODO: Support custom reorg check function from users if block hash is missing.
@@ -231,5 +232,5 @@ func (e *EthExtractor) extractOnce(ctx context.Context) (*types.EthBlockData, bo
 	e.StartBlockNumber++
 	ethMetrics.Qps().UpdateSince(startAt)
 
-	return &blockData, false, nil
+	return NewEthReorgAwareBlockData(&blockData), false, nil
 }
