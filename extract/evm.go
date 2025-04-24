@@ -8,6 +8,7 @@ import (
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/web3go"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -98,6 +99,12 @@ func NewEvmExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthE
 		hashCache: NewBlockHashCacheWithProvider(finalizeProvider),
 	}
 	return extractor, nil
+}
+
+// TrackBlockHash tracks the block hash at a specific block number in order,
+// used for reorg detection and chain consistency checks.
+func (e *EthExtractor) TrackBlockHash(blockNumber uint64, blockHash common.Hash) error {
+	return e.hashCache.Append(blockNumber, blockHash)
 }
 
 // Start starts the data extraction process. It will block until the context is canceled.
