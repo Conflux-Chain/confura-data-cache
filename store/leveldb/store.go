@@ -17,6 +17,15 @@ var (
 	keyNextBlockNumber    = []byte("nextBlockNumber")
 )
 
+// Config holds the configurations for LevelDB database.
+type Config struct {
+	// LevelDB database path.
+	Path string
+
+	// DefaultNextBlockNumber is the block number to write next block if database is empty.
+	DefaultNextBlockNumber uint64
+}
+
 // Store provides operations on a LevelDB database.
 type Store struct {
 	db *leveldb.DB
@@ -44,18 +53,18 @@ type Store struct {
 //
 // If the DB of specified path is empty and defaultNextBlockNumber specified,
 // store will write data from defaultNextBlockNumber.
-func NewStore(path string, defaultNextBlockNumber ...uint64) (*Store, error) {
+func NewStore(config Config) (*Store, error) {
 	// open or create database
-	db, err := leveldb.OpenFile(path, nil)
+	db, err := leveldb.OpenFile(config.Path, nil)
 	if dberrors.IsCorrupted(err) {
 		// try to recover database
-		logrus.WithError(err).WithField("path", path).Warn("Failed to open corrupted file, try to recover")
-		db, err = leveldb.RecoverFile(path, nil)
+		logrus.WithError(err).WithField("path", config.Path).Warn("Failed to open corrupted file, try to recover")
+		db, err = leveldb.RecoverFile(config.Path, nil)
 		if err != nil {
-			return nil, errors.WithMessagef(err, "Failed to recover file %v", path)
+			return nil, errors.WithMessagef(err, "Failed to recover file %v", config.Path)
 		}
 	} else if err != nil {
-		return nil, errors.WithMessagef(err, "Failed to open file %v", path)
+		return nil, errors.WithMessagef(err, "Failed to open file %v", config.Path)
 	}
 
 	store := Store{
@@ -91,8 +100,8 @@ func NewStore(path string, defaultNextBlockNumber ...uint64) (*Store, error) {
 
 	if ok {
 		store.nextBlockNumber.Store(nextBlockNumber)
-	} else if len(defaultNextBlockNumber) > 0 {
-		store.nextBlockNumber.Store(defaultNextBlockNumber[0])
+	} else if config.DefaultNextBlockNumber > 0 {
+		store.nextBlockNumber.Store(config.DefaultNextBlockNumber)
 	}
 
 	return &store, nil
