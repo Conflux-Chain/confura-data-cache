@@ -101,9 +101,9 @@ func NewEvmExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthE
 	return extractor, nil
 }
 
-// TrackBlockHash tracks the block hash at a specific block number in order,
-// used for reorg detection and chain consistency checks.
-func (e *EthExtractor) TrackBlockHash(blockNumber uint64, blockHash common.Hash) error {
+// SeedBlockHash seeds the block hash cache at the specified block number (must be in order).
+// This ensures that a known-good hash exists for future reorg detection.
+func (e *EthExtractor) SeedBlockHash(blockNumber uint64, blockHash common.Hash) error {
 	return e.hashCache.Append(blockNumber, blockHash)
 }
 
