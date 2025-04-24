@@ -452,13 +452,13 @@ func TestCatchUpOnce(t *testing.T) {
 	})
 }
 
-func TestTrackBlockHash(t *testing.T) {
+func TestSeedBlockHash(t *testing.T) {
 	hashCache := NewBlockHashCache(0)
 	c := new(MockEthRpcClient)
 	conf := EthConfig{}
 	ex := newMockExtractor(conf, c, hashCache)
 
-	err := ex.TrackBlockHash(98, common.HexToHash("0x98"))
+	err := ex.SeedBlockHash(98, common.HexToHash("0x98"))
 	assert.NoError(t, err)
 
 	bn, bh, ok := hashCache.Latest()
@@ -466,7 +466,7 @@ func TestTrackBlockHash(t *testing.T) {
 	assert.Equal(t, uint64(98), bn)
 	assert.Equal(t, common.HexToHash("0x98"), bh)
 
-	err = ex.TrackBlockHash(100, common.HexToHash("0x100"))
+	err = ex.SeedBlockHash(100, common.HexToHash("0x100"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not continuous")
 }
