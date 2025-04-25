@@ -20,6 +20,7 @@ type MemoryBoundedChannel[T Sizable] struct {
 	buffer       *list.List // buffered items to receive (FIFO)
 	notFullCond  *sync.Cond // signals when memory is not full
 	notEmptyCond *sync.Cond // signals when buffer is not empty
+	closed       bool       // closed flag
 }
 
 // NewMemoryBoundedChannel creates a new memory-bounded channel.
@@ -43,7 +44,13 @@ func (m *MemoryBoundedChannel[T]) Send(item T) {
 	defer m.mu.Unlock()
 
 	size := item.Size()
-	for m.capacity > 0 && m.size+size > m.capacity && m.buffer.Len() > 0 {
+	for {
+		if m.closed {
+			panic("send on closed channel")
+		}
+		if !(m.capacity > 0 && m.size+size > m.capacity && m.buffer.Len() > 0) {
+			break
+		}
 		m.notFullCond.Wait()
 	}
 	m.enqueue(item, size)
@@ -54,6 +61,10 @@ func (m *MemoryBoundedChannel[T]) TrySend(item T) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
+	if m.closed {
+		panic("send on closed channel")
+	}
+
 	size := item.Size()
 	if m.capacity > 0 && m.size+size > m.capacity && m.buffer.Len() > 0 {
 		return false
@@ -63,14 +74,18 @@ func (m *MemoryBoundedChannel[T]) TrySend(item T) bool {
 }
 
 // Receive blocks until an item is available and returns it.
-func (m *MemoryBoundedChannel[T]) Receive() T {
+func (m *MemoryBoundedChannel[T]) Receive() (v T) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for m.buffer.Len() == 0 {
+	for !m.closed && m.buffer.Len() == 0 {
 		m.notEmptyCond.Wait()
 	}
-	return m.dequeue()
+
+	if m.buffer.Len() > 0 {
+		return m.dequeue()
+	}
+	return
 }
 
 // TryReceive returns an item if available, otherwise false.
@@ -89,6 +104,16 @@ func (m *MemoryBoundedChannel[T]) Len() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.buffer.Len()
+}
+
+func (m *MemoryBoundedChannel[T]) Close() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.closed {
+		m.closed = true
+		m.notEmptyCond.Broadcast()
+		m.notFullCond.Broadcast()
+	}
 }
 
 // enqueue adds item and updates memory.
