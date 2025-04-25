@@ -116,6 +116,13 @@ func (m *MemoryBoundedChannel[T]) Close() {
 	}
 }
 
+// Closed returns true if the channel is closed.
+func (m *MemoryBoundedChannel[T]) Closed() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.closed
+}
+
 // enqueue adds item and updates memory.
 func (m *MemoryBoundedChannel[T]) enqueue(item T, size uint64) {
 	m.buffer.PushBack(item)

@@ -130,12 +130,14 @@ func TestMemoryBoundedChannelSendAfterClosePanics(t *testing.T) {
 
 func TestMemoryBoundedChannelReceiveAfterClose(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
+	assert.False(t, mc.Closed())
 
 	item := mockItem{id: 10, size: 30}
 	mc.Send(item)
 
 	// Close channel
 	mc.Close()
+	assert.True(t, mc.Closed())
 
 	// Receive should return the last item
 	received := mc.Receive()
