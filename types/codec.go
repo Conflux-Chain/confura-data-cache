@@ -2,11 +2,22 @@ package types
 
 import (
 	"encoding/json"
+
+	"github.com/pkg/errors"
 )
 
 // Lazy wraps encoded data and decode on demand for CPU saving.
 type Lazy[T any] struct {
 	encoded []byte
+}
+
+func NewLazy[T any](v T) (Lazy[T], error) {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return Lazy[T]{}, errors.WithMessage(err, "Failed to json marshal value")
+	}
+
+	return Lazy[T]{encoded}, nil
 }
 
 // MarshalJSON implements the json.Marshaler interface.
