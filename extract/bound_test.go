@@ -150,31 +150,29 @@ func TestMemoryBoundedChannelReceiveAfterClose(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestMemoryBoundedChannelCloseWakesBlockedSend(t *testing.T) {
-	mc := NewMemoryBoundedChannel[mockItem](10)
+func TestMemoryBoundedChannelCloseWakesBlockedReceive(t *testing.T) {
+	mc := NewMemoryBoundedChannel[mockItem](100)
 
-	// Fill buffer to near capacity
-	mc.Send(mockItem{id: 1, size: 9})
-
-	blockingItem := mockItem{id: 2, size: 5}
 	done := make(chan struct{})
 
 	go func() {
-		mc.Send(blockingItem) // This will block
-		close(done)
+		defer close(done)
+		item := mc.Receive()
+		// Since channel is closed and empty, we expect zero value
+		assert.Equal(t, mockItem{}, item)
 	}()
 
-	// Ensure the goroutine is blocked
+	// Give goroutine time to block on Receive
 	time.Sleep(50 * time.Millisecond)
 
-	// Close the channel to unblock the sender
+	// Closing should wake the blocked Receive
 	mc.Close()
 
 	select {
 	case <-done:
 		// Pass
 	case <-time.After(100 * time.Millisecond):
-		t.Fatal("Send() did not unblock after Close()")
+		t.Fatal("Receive() did not unblock after Close()")
 	}
 }
 
