@@ -114,3 +114,75 @@ func TestMemoryBoundedChannelConcurrentSendReceive(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestMemoryBoundedChannelSendAfterClosePanics(t *testing.T) {
+	mc := NewMemoryBoundedChannel[mockItem](100)
+	mc.Close()
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("Expected panic when sending to closed channel, but did not panic")
+		}
+	}()
+
+	mc.Send(mockItem{id: 999, size: 10}) // should panic
+}
+
+func TestMemoryBoundedChannelReceiveAfterClose(t *testing.T) {
+	mc := NewMemoryBoundedChannel[mockItem](100)
+	assert.False(t, mc.Closed())
+
+	item := mockItem{id: 10, size: 30}
+	mc.Send(item)
+
+	// Close channel
+	mc.Close()
+	assert.True(t, mc.Closed())
+
+	// Receive should return the last item
+	received := mc.Receive()
+	assert.Equal(t, item, received)
+
+	// After buffer is empty, Receive should return zero value immediately
+	defaultItem := mc.Receive()
+	assert.Equal(t, mockItem{}, defaultItem)
+
+	// Another TryReceive should return false
+	_, ok := mc.TryReceive()
+	assert.False(t, ok)
+}
+
+func TestMemoryBoundedChannelCloseWakesBlockedReceive(t *testing.T) {
+	mc := NewMemoryBoundedChannel[mockItem](100)
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+		item := mc.Receive()
+		// Since channel is closed and empty, we expect zero value
+		assert.Equal(t, mockItem{}, item)
+	}()
+
+	// Give goroutine time to block on Receive
+	time.Sleep(50 * time.Millisecond)
+
+	// Closing should wake the blocked Receive
+	mc.Close()
+
+	select {
+	case <-done:
+		// Pass
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Receive() did not unblock after Close()")
+	}
+}
+
+func TestMemoryBoundedChannelCloseIsIdempotent(t *testing.T) {
+	mc := NewMemoryBoundedChannel[mockItem](100)
+
+	// Should not panic or deadlock
+	mc.Close()
+	mc.Close()
+	mc.Close()
+}
