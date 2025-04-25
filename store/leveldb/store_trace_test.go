@@ -3,6 +3,7 @@ package leveldb
 import (
 	"testing"
 
+	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 )
@@ -39,12 +40,12 @@ func TestStoreGetBlockTraces(t *testing.T) {
 	// write block 0
 	store.Write(createTestEthData(0, common.HexToHash("0x6660")))
 
-	traces, err := store.GetBlockTracesByHash(common.HexToHash("0x6660"))
+	traces, err := store.GetBlockTraces(types.BlockHashOrNumberWithHex("0x6660"))
 	assert.Nil(t, err)
 	assert.NotNil(t, traces.MustLoad())
 	assert.Equal(t, 0, len(traces.MustLoad()))
 
-	traces, err = store.GetBlockTracesByNumber(0)
+	traces, err = store.GetBlockTraces(types.BlockHashOrNumberWithNumber(0))
 	assert.Nil(t, err)
 	assert.NotNil(t, traces.MustLoad())
 	assert.Equal(t, 0, len(traces.MustLoad()))
@@ -56,16 +57,16 @@ func TestStoreGetBlockTraces(t *testing.T) {
 		common.HexToHash("0x7772"),
 	))
 
-	traces, err = store.GetBlockTracesByHash(common.HexToHash("0x6661"))
+	traces, err = store.GetBlockTraces(types.BlockHashOrNumberWithHex("0x6661"))
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(traces.MustLoad()))
 
-	traces, err = store.GetBlockTracesByNumber(1)
+	traces, err = store.GetBlockTraces(types.BlockHashOrNumberWithNumber(1))
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(traces.MustLoad()))
 
 	// not found
-	traces, err = store.GetBlockTracesByNumber(2)
+	traces, err = store.GetBlockTraces(types.BlockHashOrNumberWithNumber(2))
 	assert.Nil(t, err)
 	assert.Nil(t, traces.MustLoad())
 }

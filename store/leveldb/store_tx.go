@@ -3,13 +3,14 @@ package leveldb
 import (
 	"encoding/binary"
 
+	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/openweb3/web3go/types"
+	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func (store *Store) writeTransactions(batch *leveldb.Batch, transactions []types.TransactionDetail) {
+func (store *Store) writeTransactions(batch *leveldb.Batch, transactions []ethTypes.TransactionDetail) {
 	// Historical transaction will not be accessed in high QPS, so just read from the block txs body.
 	// Only add necessary index for tx hash.
 	for i, tx := range transactions {
@@ -39,30 +40,20 @@ func (store *Store) getBlockNumberAndIndexByTransactionHash(txHash common.Hash) 
 }
 
 // GetTransactionByHash returns transaction for the given transaction hash. If not found, returns nil.
-func (store *Store) GetTransactionByHash(txHash common.Hash) (*types.TransactionDetail, error) {
+func (store *Store) GetTransactionByHash(txHash common.Hash) (*ethTypes.TransactionDetail, error) {
 	blockNumber, txIndex, ok, err := store.getBlockNumberAndIndexByTransactionHash(txHash)
 	if err != nil || !ok {
 		return nil, err
 	}
 
-	return store.GetTransactionByBlockNumberAndIndex(blockNumber, txIndex)
+	return store.GetTransactionByIndex(types.BlockHashOrNumberWithNumber(blockNumber), txIndex)
 }
 
-// GetTransactionByBlockHashAndIndex returns transaction for the given block hash and transaction index. If not found, returns nil.
-func (store *Store) GetTransactionByBlockHashAndIndex(blockHash common.Hash, txIndex uint32) (*types.TransactionDetail, error) {
-	blockNumber, ok, err := store.getBlockNumberByHash(blockHash)
-	if err != nil || !ok {
-		return nil, err
-	}
-
-	return store.GetTransactionByBlockNumberAndIndex(blockNumber, txIndex)
-}
-
-// GetTransactionByBlockNumberAndIndex returns transaction for the given block number and transaction index. If not found, returns nil.
-func (store *Store) GetTransactionByBlockNumberAndIndex(blockNumber uint64, txIndex uint32) (*types.TransactionDetail, error) {
-	blockLazy, err := store.GetBlockByNumber(blockNumber)
+// GetTransactionByIndex returns transaction for the given block hash or number along with transaction index. If not found, returns nil.
+func (store *Store) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex uint32) (*ethTypes.TransactionDetail, error) {
+	blockLazy, err := store.GetBlock(bhon)
 	if err != nil {
-		return nil, errors.WithMessagef(err, "Failed to get block by number %v", blockNumber)
+		return nil, errors.WithMessage(err, "Failed to get block by hash or number")
 	}
 
 	block, err := blockLazy.Load()

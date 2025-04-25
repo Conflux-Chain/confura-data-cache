@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
-	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -25,8 +24,13 @@ func (store *Store) writeBlock(batch *leveldb.Batch, block *ethTypes.Block) {
 	store.write(batch, store.keyBlockNumber2TxCountPool, blockNumberBuf[:], txCountBuf[:])
 }
 
-// getBlockNumberByHash returns block number for the given block hash if any.
-func (store *Store) getBlockNumberByHash(hash common.Hash) (uint64, bool, error) {
+// getBlockNumber returns block number for the given block hash or number if any.
+func (store *Store) getBlockNumber(bhon types.BlockHashOrNumber) (uint64, bool, error) {
+	hash, ok, number := bhon.HashOrNumber()
+	if !ok {
+		return number, true, nil
+	}
+
 	value, ok, err := store.read(store.keyBlockHash2NumberPool, hash.Bytes(), 8)
 	if err != nil {
 		return 0, false, errors.WithMessage(err, "Failed to get block number by hash")
@@ -39,23 +43,18 @@ func (store *Store) getBlockNumberByHash(hash common.Hash) (uint64, bool, error)
 	return binary.BigEndian.Uint64(value), true, nil
 }
 
-// GetBlockByHash returns block for the given block hash. If not found, returns nil.
-func (store *Store) GetBlockByHash(hash common.Hash) (types.Lazy[*ethTypes.Block], error) {
-	number, ok, err := store.getBlockNumberByHash(hash)
+// GetBlock returns block for the given block hash or number. If not found, returns nil.
+func (store *Store) GetBlock(bhon types.BlockHashOrNumber) (types.Lazy[*ethTypes.Block], error) {
+	number, ok, err := store.getBlockNumber(bhon)
 	if err != nil || !ok {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
-	return store.GetBlockByNumber(number)
-}
-
-// GetBlockByNumber returns block for the given block number. If not found, returns nil.
-func (store *Store) GetBlockByNumber(number uint64) (types.Lazy[*ethTypes.Block], error) {
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], number)
 
 	var block types.Lazy[*ethTypes.Block]
-	ok, err := store.readJson(store.keyBlockNumber2BlockPool, blockNumberBuf[:], &block)
+	ok, err = store.readJson(store.keyBlockNumber2BlockPool, blockNumberBuf[:], &block)
 	if err != nil || !ok {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
@@ -63,20 +62,14 @@ func (store *Store) GetBlockByNumber(number uint64) (types.Lazy[*ethTypes.Block]
 	return block, nil
 }
 
-// GetBlockTransactionCountByHash returns the transaction count for the given block hash.
+// GetBlockTransactionCount returns the transaction count for the given block hash or number.
 // Returns -1 if the given block hash not found.
-func (store *Store) GetBlockTransactionCountByHash(blockHash common.Hash) (int64, error) {
-	blockNumber, ok, err := store.getBlockNumberByHash(blockHash)
+func (store *Store) GetBlockTransactionCount(bhon types.BlockHashOrNumber) (int64, error) {
+	blockNumber, ok, err := store.getBlockNumber(bhon)
 	if err != nil || !ok {
 		return -1, err
 	}
 
-	return store.GetBlockTransactionCountByNumber(blockNumber)
-}
-
-// GetBlockTransactionCountByNumber returns the transaction count for the given block number.
-// Returns -1 if the given block number not found.
-func (store *Store) GetBlockTransactionCountByNumber(blockNumber uint64) (int64, error) {
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
 
