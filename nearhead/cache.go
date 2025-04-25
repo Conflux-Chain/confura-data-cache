@@ -123,12 +123,17 @@ func (c *EthCache) del(bn uint64) {
 	delete(c.blockNumber2BlockSize, bn)
 }
 
-// GetBlockByNumber returns block with given number.
-func (c *EthCache) GetBlockByNumber(blockNumber uint64, isFull bool) *ethTypes.Block {
+// GetBlock returns block with given number or hash.
+func (c *EthCache) GetBlock(bhon types.BlockHashOrNumber, isFull bool) *ethTypes.Block {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
-	data, exists := c.blockNumber2BlockDatas[blockNumber]
+	blockNumber := c.getBlockNumber(bhon)
+	if blockNumber == nil {
+		return nil
+	}
+
+	data, exists := c.blockNumber2BlockDatas[*blockNumber]
 	if !exists {
 		return nil
 	}
@@ -147,19 +152,6 @@ func (c *EthCache) GetBlockByNumber(blockNumber uint64, isFull bool) *ethTypes.B
 	block := *data.Block
 	block.Transactions = *txOrHashList
 	return &block
-}
-
-// GetBlockByHash returns block with given block hash.
-func (c *EthCache) GetBlockByHash(blockHash common.Hash, isFull bool) *ethTypes.Block {
-	c.rwMutex.RLock()
-	defer c.rwMutex.RUnlock()
-
-	blockNumber, exists := c.blockHash2BlockNumbers[blockHash]
-	if !exists {
-		return nil
-	}
-
-	return c.GetBlockByNumber(blockNumber, isFull)
 }
 
 // GetTransactionByHash returns transaction with given transaction hash.
@@ -181,25 +173,17 @@ func (c *EthCache) GetTransactionByHash(txHash common.Hash) *ethTypes.Transactio
 	return &tx
 }
 
-// GetBlockReceiptsByHash returns the receipts of a given block hash.
-func (c *EthCache) GetBlockReceiptsByHash(blockHash common.Hash) []ethTypes.Receipt {
+// GetBlockReceipts returns the receipts of a given block number or hash.
+func (c *EthCache) GetBlockReceipts(bhon types.BlockHashOrNumber) []ethTypes.Receipt {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
-	blockNumber, exists := c.blockHash2BlockNumbers[blockHash]
-	if !exists {
+	blockNumber := c.getBlockNumber(bhon)
+	if blockNumber == nil {
 		return nil
 	}
 
-	return c.GetBlockReceiptsByNumber(blockNumber)
-}
-
-// GetBlockReceiptsByNumber returns the receipts of a given block number.
-func (c *EthCache) GetBlockReceiptsByNumber(blockNumber uint64) []ethTypes.Receipt {
-	c.rwMutex.RLock()
-	defer c.rwMutex.RUnlock()
-
-	data, exists := c.blockNumber2BlockDatas[blockNumber]
+	data, exists := c.blockNumber2BlockDatas[*blockNumber]
 	if !exists {
 		return nil
 	}
@@ -226,25 +210,17 @@ func (c *EthCache) GetTransactionReceipt(txHash common.Hash) *ethTypes.Receipt {
 	return &receipt
 }
 
-// GetBlockTracesByHash returns all traces produced at given block by hash
-func (c *EthCache) GetBlockTracesByHash(blockHash common.Hash) []ethTypes.LocalizedTrace {
+// GetBlockTraces returns all traces produced at given block by number or hash
+func (c *EthCache) GetBlockTraces(bhon types.BlockHashOrNumber) []ethTypes.LocalizedTrace {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
-	blockNumber, exists := c.blockHash2BlockNumbers[blockHash]
-	if !exists {
+	blockNumber := c.getBlockNumber(bhon)
+	if blockNumber == nil {
 		return nil
 	}
 
-	return c.GetBlockTracesByNumber(blockNumber)
-}
-
-// GetBlockTracesByNumber returns all traces produced at given block by number
-func (c *EthCache) GetBlockTracesByNumber(blockNumber uint64) []ethTypes.LocalizedTrace {
-	c.rwMutex.RLock()
-	defer c.rwMutex.RUnlock()
-
-	data, exists := c.blockNumber2BlockDatas[blockNumber]
+	data, exists := c.blockNumber2BlockDatas[*blockNumber]
 	if !exists {
 		return nil
 	}
@@ -370,6 +346,21 @@ func (c *EthCache) collectBlockLogs(blockNumber uint64, addrMap map[common.Addre
 	}
 
 	return logs
+}
+
+// getBlockNumber returns block number for the given block hash or number if any.
+func (c *EthCache) getBlockNumber(bhon types.BlockHashOrNumber) *uint64 {
+	hash, ok, number := bhon.HashOrNumber()
+	if !ok {
+		return &number
+	}
+
+	blockNumber, exists := c.blockHash2BlockNumbers[hash]
+	if !exists {
+		return nil
+	}
+
+	return &blockNumber
 }
 
 type TransactionIndex struct {
