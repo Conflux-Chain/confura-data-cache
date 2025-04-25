@@ -142,17 +142,17 @@ func mustNormalizeBlockRange(client *web3go.Client, blockFrom int64, numBlocks u
 
 func mustValidateEthBlockData(cache map[uint64]types.EthBlockData, store *leveldb.Store, bn uint64) {
 	// block
-	block, err := store.GetBlockByNumber(bn)
+	block, err := store.GetBlock(types.BlockHashOrNumberWithNumber(bn))
 	assertJsonEqual(err, bn, "GetBlockByNumber", cache[bn].Block, block.MustLoad())
 	blockHash := block.MustLoad().Hash
 
-	block, err = store.GetBlockByHash(blockHash)
+	block, err = store.GetBlock(types.BlockHashOrNumberWithHash(blockHash))
 	assertJsonEqual(err, bn, "GetBlockByHash", cache[bn].Block, block.MustLoad())
 
-	txCount, err := store.GetBlockTransactionCountByNumber(bn)
+	txCount, err := store.GetBlockTransactionCount(types.BlockHashOrNumberWithNumber(bn))
 	assertJsonEqual(err, bn, "GetBlockTransactionCountByNumber", len(cache[bn].Block.Transactions.Transactions()), txCount)
 
-	txCount, err = store.GetBlockTransactionCountByHash(blockHash)
+	txCount, err = store.GetBlockTransactionCount(types.BlockHashOrNumberWithHash(blockHash))
 	assertJsonEqual(err, bn, "GetBlockTransactionCountByHash", len(cache[bn].Block.Transactions.Transactions()), txCount)
 
 	// transaction
@@ -160,10 +160,10 @@ func mustValidateEthBlockData(cache map[uint64]types.EthBlockData, store *leveld
 		tx, err := store.GetTransactionByHash(v.Hash)
 		assertJsonEqual(err, bn, "GetTransactionByHash", v, tx, logrus.Fields{"txIndex": i})
 
-		tx, err = store.GetTransactionByBlockHashAndIndex(blockHash, uint32(i))
+		tx, err = store.GetTransactionByIndex(types.BlockHashOrNumberWithHash(blockHash), uint32(i))
 		assertJsonEqual(err, bn, "GetTransactionByBlockHashAndIndex", v, tx, logrus.Fields{"txIndex": i})
 
-		tx, err = store.GetTransactionByBlockNumberAndIndex(bn, uint32(i))
+		tx, err = store.GetTransactionByIndex(types.BlockHashOrNumberWithNumber(bn), uint32(i))
 		assertJsonEqual(err, bn, "GetTransactionByBlockNumberAndIndex", v, tx, logrus.Fields{"txIndex": i})
 	}
 
@@ -174,10 +174,10 @@ func mustValidateEthBlockData(cache map[uint64]types.EthBlockData, store *leveld
 	}
 
 	// block receipts
-	receipts, err := store.GetBlockReceiptsByNumber(bn)
+	receipts, err := store.GetBlockReceipts(types.BlockHashOrNumberWithNumber(bn))
 	assertJsonEqual(err, bn, "GetBlockReceiptsByNumber", cache[bn].Receipts, receipts)
 
-	receipts, err = store.GetBlockReceiptsByHash(blockHash)
+	receipts, err = store.GetBlockReceipts(types.BlockHashOrNumberWithHash(blockHash))
 	assertJsonEqual(err, bn, "GetBlockReceiptsByHash", cache[bn].Receipts, receipts)
 
 	// tx traces
@@ -194,10 +194,10 @@ func mustValidateEthBlockData(cache map[uint64]types.EthBlockData, store *leveld
 	}
 
 	// block traces
-	traces, err := store.GetBlockTracesByNumber(bn)
+	traces, err := store.GetBlockTraces(types.BlockHashOrNumberWithNumber(bn))
 	assertJsonEqual(err, bn, "GetBlockTracesByNumber", cache[bn].Traces, traces)
 
-	traces, err = store.GetBlockTracesByHash(blockHash)
+	traces, err = store.GetBlockTraces(types.BlockHashOrNumberWithHash(blockHash))
 	assertJsonEqual(err, bn, "GetBlockTracesByHash", cache[bn].Traces, traces)
 }
 

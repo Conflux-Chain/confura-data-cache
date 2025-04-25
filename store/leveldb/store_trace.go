@@ -28,7 +28,7 @@ func (store *Store) GetTransactionTraces(txHash common.Hash) ([]ethTypes.Localiz
 		return nil, err
 	}
 
-	blockTracesLazy, err := store.GetBlockTracesByNumber(blockNumber)
+	blockTracesLazy, err := store.GetBlockTraces(types.BlockHashOrNumberWithNumber(blockNumber))
 	if err != nil {
 		return nil, errors.WithMessagef(err, "Failed to get block traces by number %v", blockNumber)
 	}
@@ -48,23 +48,18 @@ func (store *Store) GetTransactionTraces(txHash common.Hash) ([]ethTypes.Localiz
 	return txTraces, nil
 }
 
-// GetBlockTracesByHash returns all block traces for the given block hash. If not found, returns nil.
-func (store *Store) GetBlockTracesByHash(blockHash common.Hash) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
-	blockNumber, ok, err := store.getBlockNumberByHash(blockHash)
+// GetBlockTraces returns all block traces for the given block hash or number. If not found, returns nil.
+func (store *Store) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
+	blockNumber, ok, err := store.getBlockNumber(bhon)
 	if err != nil || !ok {
 		return types.Lazy[[]ethTypes.LocalizedTrace]{}, err
 	}
 
-	return store.GetBlockTracesByNumber(blockNumber)
-}
-
-// GetBlockTracesByNumber returns all block traces for the given block number. If not found, returns nil.
-func (store *Store) GetBlockTracesByNumber(blockNumber uint64) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
 
 	var traces types.Lazy[[]ethTypes.LocalizedTrace]
-	ok, err := store.readJson(store.keyBlockNumber2TracesPool, blockNumberBuf[:], &traces)
+	ok, err = store.readJson(store.keyBlockNumber2TracesPool, blockNumberBuf[:], &traces)
 	if err != nil || !ok {
 		return types.Lazy[[]ethTypes.LocalizedTrace]{}, err
 	}

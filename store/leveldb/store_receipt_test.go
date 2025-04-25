@@ -3,6 +3,7 @@ package leveldb
 import (
 	"testing"
 
+	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 )
@@ -39,12 +40,12 @@ func TestStoreGetBlockReceipts(t *testing.T) {
 	// write block 0
 	store.Write(createTestEthData(0, common.HexToHash("0x6660")))
 
-	receipts, err := store.GetBlockReceiptsByHash(common.HexToHash("0x6660"))
+	receipts, err := store.GetBlockReceipts(types.BlockHashOrNumberWithHex("0x6660"))
 	assert.Nil(t, err)
 	assert.NotNil(t, receipts.MustLoad())
 	assert.Equal(t, 0, len(receipts.MustLoad()))
 
-	receipts, err = store.GetBlockReceiptsByNumber(0)
+	receipts, err = store.GetBlockReceipts(types.BlockHashOrNumberWithNumber(0))
 	assert.Nil(t, err)
 	assert.NotNil(t, receipts.MustLoad())
 	assert.Equal(t, 0, len(receipts.MustLoad()))
@@ -56,16 +57,16 @@ func TestStoreGetBlockReceipts(t *testing.T) {
 		common.HexToHash("0x7772"),
 	))
 
-	receipts, err = store.GetBlockReceiptsByHash(common.HexToHash("0x6661"))
+	receipts, err = store.GetBlockReceipts(types.BlockHashOrNumberWithHex("0x6661"))
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(receipts.MustLoad()))
 
-	receipts, err = store.GetBlockReceiptsByNumber(1)
+	receipts, err = store.GetBlockReceipts(types.BlockHashOrNumberWithNumber(1))
 	assert.Nil(t, err)
 	assert.Equal(t, 3, len(receipts.MustLoad()))
 
 	// not found
-	receipts, err = store.GetBlockReceiptsByNumber(2)
+	receipts, err = store.GetBlockReceipts(types.BlockHashOrNumberWithNumber(2))
 	assert.Nil(t, err)
 	assert.Nil(t, receipts.MustLoad())
 }

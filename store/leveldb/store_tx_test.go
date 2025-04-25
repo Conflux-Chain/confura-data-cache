@@ -3,6 +3,7 @@ package leveldb
 import (
 	"testing"
 
+	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 )
@@ -29,14 +30,14 @@ func TestStoreGetTransaction(t *testing.T) {
 	assert.Equal(t, common.HexToHash("0x6661"), *tx.BlockHash)
 
 	// get tx by block hash and index
-	tx, err = store.GetTransactionByBlockHashAndIndex(common.HexToHash("0x6661"), 2)
+	tx, err = store.GetTransactionByIndex(types.BlockHashOrNumberWithHex("0x6661"), 2)
 	assert.Nil(t, err)
 	assert.Equal(t, common.HexToHash("0x7772"), tx.Hash)
 	assert.Equal(t, uint64(1), tx.BlockNumber.Uint64())
 	assert.Equal(t, common.HexToHash("0x6661"), *tx.BlockHash)
 
 	// get tx by block number and index
-	tx, err = store.GetTransactionByBlockNumberAndIndex(1, 0)
+	tx, err = store.GetTransactionByIndex(types.BlockHashOrNumberWithNumber(1), 0)
 	assert.Nil(t, err)
 	assert.Equal(t, common.HexToHash("0x7770"), tx.Hash)
 	assert.Equal(t, uint64(1), tx.BlockNumber.Uint64())
