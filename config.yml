@@ -1,2 +1,15 @@
 # Please refer to following file for basic configurations, e.g. log, alert, metrics and store:
 # https://github.com/Conflux-Chain/go-conflux-util/blob/main/config/config.yaml
+
+# LevelDB database configurations
+# store:
+#   leveldb:
+#     path: db
+#     DefaultNextBlockNumber: 0
+
+# RPC configurations
+# rpc:
+#   endpoint: :38545
+#   cors: ["*"]
+#   virtualHosts: ["*"]
+#   jwtSecretHex: 

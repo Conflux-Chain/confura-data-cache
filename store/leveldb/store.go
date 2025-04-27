@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/mcuadros/go-defaults"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -20,10 +21,15 @@ var (
 // Config holds the configurations for LevelDB database.
 type Config struct {
 	// LevelDB database path.
-	Path string
+	Path string `default:"db"`
 
 	// DefaultNextBlockNumber is the block number to write next block if database is empty.
 	DefaultNextBlockNumber uint64
+}
+
+func DefaultConfig() (config Config) {
+	defaults.SetDefaults(&config)
+	return
 }
 
 // Store provides operations on a LevelDB database.
