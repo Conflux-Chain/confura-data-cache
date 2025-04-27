@@ -10,6 +10,20 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Sized wraps a value with its precomputed memory footprint.
+type Sized[T any] struct {
+	Value T
+	Size  int
+}
+
+// NewSized constructs a Sized wrapper around a value with an explicitly provided size in bytes.
+func NewSized[T any](value T, bytes int) Sized[T] {
+	return Sized[T]{
+		Value: value,
+		Size:  bytes,
+	}
+}
+
 // EthBlockData contains all required data in a block.
 type EthBlockData struct {
 	Block    *types.Block

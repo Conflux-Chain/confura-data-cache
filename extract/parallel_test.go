@@ -27,13 +27,14 @@ func TestEthParallelWorkerParallelDo(t *testing.T) {
 	mockClient.On("BlockBundleByNumber", mock.Anything, ethTypes.BlockNumber(101)).
 		Return(types.EthBlockData{}, errors.New("rpc error"))
 
-	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+	dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
 	worker := NewEthParallelWorker(start, dataChan, mockClient)
 
 	result, err := worker.ParallelDo(context.Background(), 0, 0)
 	assert.NoError(t, err)
-	blockData, ok := result.BlockData()
-	assert.True(t, ok)
+	blockData, reorgHeight := result.Value()
+	assert.Nil(t, reorgHeight)
+	assert.NotNil(t, blockData)
 	assert.Equal(t, &mockData, blockData)
 
 	// test rpc error
@@ -61,21 +62,23 @@ func TestParallelWorkerParallelCollect(t *testing.T) {
 		Block: makeMockBlock(100, "0x100", "0x99"),
 	}
 
-	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+	dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
 	worker := NewEthParallelWorker(100, dataChan, mockClient)
 
-	err := worker.ParallelCollect(context.Background(), &parallel.Result[*EthReorgAwareBlockData]{Value: NewEthReorgAwareBlockData(mockData)})
+	err := worker.ParallelCollect(context.Background(), &parallel.Result[*EthRevertableBlockData]{
+		Value: NewEthRevertableBlockData(mockData),
+	})
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), worker.NumCollected())
 
 	resultData := dataChan.Receive()
 	assert.NotNil(t, resultData)
-	blockData, ok := resultData.BlockData()
+	blockData, reorgHeight := resultData.Value()
+	assert.Nil(t, reorgHeight)
 	assert.NotNil(t, blockData)
-	assert.True(t, ok)
 	assert.Equal(t, mockData, blockData)
 
-	err = worker.ParallelCollect(context.Background(), &parallel.Result[*EthReorgAwareBlockData]{Err: errors.New("rpc error")})
+	err = worker.ParallelCollect(context.Background(), &parallel.Result[*EthRevertableBlockData]{Err: errors.New("rpc error")})
 	assert.Error(t, err)
 	assert.Equal(t, uint64(1), worker.NumCollected())
 }

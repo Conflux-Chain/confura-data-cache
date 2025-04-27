@@ -69,17 +69,14 @@ func TestEvmExtractIntegration(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+	dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
 	go extractor.Start(ctx, dataChan)
 
 	data := dataChan.Receive()
 	assert.NotNil(t, data)
-	reorgHeight, isReorg := data.ReorgHeight()
-	assert.False(t, isReorg)
-	assert.Zero(t, reorgHeight)
-
-	blockData, isData := data.BlockData()
-	assert.True(t, isData)
+	blockData, reorg := data.Value()
+	assert.Nil(t, reorg)
+	assert.NotNil(t, blockData)
 	assert.NotNil(t, blockData.Block)
 	assert.NotNil(t, blockData.Receipts)
 	assert.NotNil(t, blockData.Traces)
@@ -153,7 +150,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 		cache       *BlockHashCache
 		wantErr     string
 		caught      bool
-		resultCheck func(result *EthReorgAwareBlockData)
+		resultCheck func(result *EthRevertableBlockData)
 	}{
 		{
 			"TargetBlockError",
@@ -232,15 +229,12 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			}(),
 			"reorg detected",
 			false,
-			func(result *EthReorgAwareBlockData) {
+			func(result *EthRevertableBlockData) {
 				assert.NotNil(t, result)
-				reorgHeight, ok := result.ReorgHeight()
-				assert.True(t, ok)
-				assert.Equal(t, uint64(98), reorgHeight)
-				assert.Zero(t, result.Size())
-				blockData, ok := result.BlockData()
-				assert.False(t, ok)
+				blockData, reorgHeight := result.Value()
+				assert.NotNil(t, reorgHeight)
 				assert.Nil(t, blockData)
+				assert.Equal(t, uint64(98), *reorgHeight)
 			},
 		},
 		{
@@ -291,15 +285,13 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			}(),
 			"",
 			false,
-			func(result *EthReorgAwareBlockData) {
+			func(result *EthRevertableBlockData) {
 				assert.NotNil(t, result)
-				reorgHeight, ok := result.ReorgHeight()
-				assert.False(t, ok)
-				assert.Equal(t, uint64(0), reorgHeight)
-				assert.NotZero(t, result.Size())
-				blockData, ok := result.BlockData()
-				assert.True(t, ok)
+				blockData, reorgHeight := result.Value()
+				assert.Nil(t, reorgHeight)
 				assert.NotNil(t, blockData)
+				assert.Equal(t, uint64(99), blockData.Block.Number.Uint64())
+				assert.Equal(t, common.HexToHash("0x99"), blockData.Block.Hash)
 			},
 		},
 	}
@@ -334,7 +326,7 @@ func TestEthExtractorStart(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		ex := newMockExtractor(EthConfig{PollInterval: time.Millisecond, StartBlockNumber: 101}, c, nil)
 
-		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+		dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
 
 		go ex.Start(ctx, dataChan)
 		cancel()
@@ -363,10 +355,10 @@ func TestEthExtractorStart(t *testing.T) {
 			PollInterval:      time.Millisecond,
 		}, c, cache)
 
-		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+		dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
 		go ex.Start(ctx, dataChan)
 
-		resultChan := make(chan *EthReorgAwareBlockData)
+		resultChan := make(chan *EthRevertableBlockData)
 		go func() {
 			resultChan <- dataChan.Receive()
 		}()
@@ -374,8 +366,8 @@ func TestEthExtractorStart(t *testing.T) {
 		select {
 		case data := <-resultChan:
 			assert.NotNil(t, data)
-			blockData, ok := data.BlockData()
-			assert.True(t, ok)
+			blockData, reorgHeight := data.Value()
+			assert.Nil(t, reorgHeight)
 			assert.NotNil(t, blockData)
 			assert.Equal(t, uint64(100), blockData.Block.Number.Uint64())
 		case <-time.After(100 * time.Millisecond):
@@ -397,11 +389,11 @@ func TestEthExtractorCatchUpUntilFinalized(t *testing.T) {
 
 	conf := EthConfig{SerialOption: parallel.SerialOption{Routines: 2}, StartBlockNumber: 98}
 	ex := newMockExtractor(conf, c, NewBlockHashCache(0))
-	dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+	dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
 	ex.catchUpUntilFinalized(context.Background(), dataChan)
 
 	for i := 98; i <= 100; i++ {
-		resultChan := make(chan *EthReorgAwareBlockData)
+		resultChan := make(chan *EthRevertableBlockData)
 		go func() {
 			resultChan <- dataChan.Receive()
 		}()
@@ -409,8 +401,8 @@ func TestEthExtractorCatchUpUntilFinalized(t *testing.T) {
 		select {
 		case data := <-resultChan:
 			assert.NotNil(t, data)
-			blockData, ok := data.BlockData()
-			assert.True(t, ok)
+			blockData, reorgHeight := data.Value()
+			assert.Nil(t, reorgHeight)
 			assert.NotNil(t, blockData)
 			assert.Equal(t, uint64(i), blockData.Block.Number.Uint64())
 		case <-time.After(100 * time.Millisecond):
@@ -430,7 +422,7 @@ func TestCatchUpOnce(t *testing.T) {
 		conf := EthConfig{SerialOption: parallel.SerialOption{Routines: 2}, StartBlockNumber: 98}
 		ex := newMockExtractor(conf, c, nil)
 
-		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+		dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
 		err, done := ex.catchUpOnce(context.Background(), dataChan)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "rpc error")
@@ -445,20 +437,20 @@ func TestCatchUpOnce(t *testing.T) {
 		conf := EthConfig{SerialOption: parallel.SerialOption{Routines: 2}, StartBlockNumber: 98}
 		ex := newMockExtractor(conf, c, nil)
 
-		dataChan := NewEthMemoryBoundedChannel(math.MaxUint64)
+		dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
 		err, done := ex.catchUpOnce(context.Background(), dataChan)
 		assert.NoError(t, err)
 		assert.True(t, done)
 	})
 }
 
-func TestSeedBlockHash(t *testing.T) {
+func TestAppendBlockHash(t *testing.T) {
 	hashCache := NewBlockHashCache(0)
 	c := new(MockEthRpcClient)
 	conf := EthConfig{}
 	ex := newMockExtractor(conf, c, hashCache)
 
-	err := ex.SeedBlockHash(98, common.HexToHash("0x98"))
+	err := ex.AppendBlockHash(98, common.HexToHash("0x98"))
 	assert.NoError(t, err)
 
 	bn, bh, ok := hashCache.Latest()
@@ -466,7 +458,7 @@ func TestSeedBlockHash(t *testing.T) {
 	assert.Equal(t, uint64(98), bn)
 	assert.Equal(t, common.HexToHash("0x98"), bh)
 
-	err = ex.SeedBlockHash(100, common.HexToHash("0x100"))
+	err = ex.AppendBlockHash(100, common.HexToHash("0x100"))
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not continuous")
 }

@@ -3,55 +3,32 @@ package extract
 import (
 	"container/list"
 	"sync"
-	"sync/atomic"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/DmitriyVTitov/size"
 )
 
-// Sizable represents types that report their memory footprint.
+// Sizable represents types that can report their memory footprint.
 type Sizable interface {
-	Size() uint64
+	Size() int
 }
 
-// ReorgAwareBlockData wraps a block data with reorg information.
-type ReorgAwareBlockData[T Sizable] struct {
+// RevertableBlockData wraps a block data with optional reorg information.
+type RevertableBlockData[T any] struct {
 	blockData   T
 	reorgHeight *uint64
-	cachedSize  atomic.Uint64
 }
 
-func (r *ReorgAwareBlockData[T]) ReorgHeight() (uint64, bool) {
-	if r.reorgHeight != nil {
-		return *r.reorgHeight, true
-	}
-	return 0, false
-}
-
-func (r *ReorgAwareBlockData[T]) BlockData() (v T, ok bool) {
-	if r.reorgHeight != nil {
-		return
-	}
-	return r.blockData, true
-}
-
-func (r *ReorgAwareBlockData[T]) Size() uint64 {
-	if r.reorgHeight != nil {
-		return 0
-	}
-	if v := r.cachedSize.Load(); v != 0 {
-		return v
-	}
-
-	size := r.blockData.Size()
-	r.cachedSize.Store(size)
-	return size
+// Value returns the block data and reorg height.
+func (r *RevertableBlockData[T]) Value() (T, *uint64) {
+	return r.blockData, r.reorgHeight
 }
 
 // MemoryBoundedChannel wraps a memory-bounded channel.
-type MemoryBoundedChannel[T Sizable] struct {
+type MemoryBoundedChannel[T any] struct {
 	mu           sync.RWMutex
-	size         uint64     // current memory size used by buffered items
-	capacity     uint64     // memory limit in bytes (0 = unlimited)
+	size         int        // current memory size used by buffered items
+	capacity     int        // memory limit in bytes
 	buffer       *list.List // buffered items to receive (FIFO)
 	notFullCond  *sync.Cond // signals when memory is not full
 	notEmptyCond *sync.Cond // signals when buffer is not empty
@@ -59,8 +36,8 @@ type MemoryBoundedChannel[T Sizable] struct {
 }
 
 // NewMemoryBoundedChannel creates a new memory-bounded channel.
-func NewMemoryBoundedChannel[T Sizable](capacity uint64) *MemoryBoundedChannel[T] {
-	if capacity == 0 {
+func NewMemoryBoundedChannel[T any](capacity int) *MemoryBoundedChannel[T] {
+	if capacity <= 0 {
 		panic("capacity must be greater than 0")
 	}
 
@@ -78,17 +55,23 @@ func (m *MemoryBoundedChannel[T]) Send(item T) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	size := item.Size()
+	var bytes int
+	if sizable, ok := any(item).(Sizable); ok {
+		bytes = sizable.Size()
+	} else {
+		bytes = size.Of(item)
+	}
+
 	for {
 		if m.closed {
 			panic("send on closed channel")
 		}
-		if !(m.capacity > 0 && m.size+size > m.capacity && m.buffer.Len() > 0) {
+		if !(m.size+bytes > m.capacity && m.buffer.Len() > 0) {
 			break
 		}
 		m.notFullCond.Wait()
 	}
-	m.enqueue(item, size)
+	m.enqueue(types.NewSized(item, bytes))
 }
 
 // TrySend attempts to send without blocking. Returns false if over memory limit.
@@ -100,11 +83,17 @@ func (m *MemoryBoundedChannel[T]) TrySend(item T) bool {
 		panic("send on closed channel")
 	}
 
-	size := item.Size()
-	if m.capacity > 0 && m.size+size > m.capacity && m.buffer.Len() > 0 {
+	var bytes int
+	if sizable, ok := any(item).(Sizable); ok {
+		bytes = sizable.Size()
+	} else {
+		bytes = size.Of(item)
+	}
+
+	if m.size+bytes > m.capacity && m.buffer.Len() > 0 {
 		return false
 	}
-	m.enqueue(item, size)
+	m.enqueue(types.NewSized(item, bytes))
 	return true
 }
 
@@ -159,9 +148,11 @@ func (m *MemoryBoundedChannel[T]) Closed() bool {
 }
 
 // enqueue adds item and updates memory.
-func (m *MemoryBoundedChannel[T]) enqueue(item T, size uint64) {
-	m.buffer.PushBack(item)
-	m.size += size
+func (m *MemoryBoundedChannel[T]) enqueue(sitem types.Sized[T]) {
+	ethMetrics.DataSize().Update(int64(sitem.Size))
+
+	m.buffer.PushBack(sitem)
+	m.size += sitem.Size
 
 	m.notEmptyCond.Broadcast()
 }
@@ -171,27 +162,27 @@ func (m *MemoryBoundedChannel[T]) dequeue() T {
 	elem := m.buffer.Front()
 	m.buffer.Remove(elem)
 
-	item := elem.Value.(T)
-	m.size -= item.Size()
+	sitem := elem.Value.(types.Sized[T])
+	m.size -= sitem.Size
 
 	m.notFullCond.Broadcast()
-	return item
+	return sitem.Value
 }
 
-// Convenience alias for Eth ReorgAwareBlockData.
-type EthReorgAwareBlockData = ReorgAwareBlockData[*types.EthBlockData]
+// Convenience alias for evm RevertableBlockData.
+type EthRevertableBlockData = RevertableBlockData[*types.EthBlockData]
 
-func NewEthReorgAwareBlockData(blockData *types.EthBlockData) *EthReorgAwareBlockData {
-	return &EthReorgAwareBlockData{blockData: blockData}
+func NewEthRevertableBlockData(blockData *types.EthBlockData) *EthRevertableBlockData {
+	return &EthRevertableBlockData{blockData: blockData}
 }
 
-func NewEthReorgAwareBlockDataWithHeight(reorgHeight uint64) *EthReorgAwareBlockData {
-	return &EthReorgAwareBlockData{reorgHeight: &reorgHeight}
+func NewEthRevertableBlockDataWithReorg(reorgHeight uint64) *EthRevertableBlockData {
+	return &EthRevertableBlockData{reorgHeight: &reorgHeight}
 }
 
 // Convenience alias for EthBlockData channels.
-type EthMemoryBoundedChannel = MemoryBoundedChannel[*EthReorgAwareBlockData]
+type EthMemoryBoundedChannel = MemoryBoundedChannel[*EthRevertableBlockData]
 
-func NewEthMemoryBoundedChannel(capacity uint64) *EthMemoryBoundedChannel {
-	return NewMemoryBoundedChannel[*EthReorgAwareBlockData](capacity)
+func NewEthMemoryBoundedChannel(capacity int) *EthMemoryBoundedChannel {
+	return NewMemoryBoundedChannel[*EthRevertableBlockData](capacity)
 }

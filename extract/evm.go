@@ -101,9 +101,9 @@ func NewEvmExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthE
 	return extractor, nil
 }
 
-// SeedBlockHash seeds the block hash cache at the specified block number (must be in order).
+// AppendBlockHash appends block number and hash into cache (must be in order).
 // This ensures that a known-good hash exists for future reorg detection.
-func (e *EthExtractor) SeedBlockHash(blockNumber uint64, blockHash common.Hash) error {
+func (e *EthExtractor) AppendBlockHash(blockNumber uint64, blockHash common.Hash) error {
 	return e.hashCache.Append(blockNumber, blockHash)
 }
 
@@ -126,7 +126,6 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChan
 
 		resultData, caughtUp, err := e.extractOnce(ctx)
 		if resultData != nil {
-			ethMetrics.DataSize().Update(int64(resultData.Size()))
 			dataChan.Send(resultData)
 		}
 
@@ -182,7 +181,7 @@ func (e *EthExtractor) catchUpOnce(ctx context.Context, dataChan *EthMemoryBound
 }
 
 // extractOnce fetches the block data for the current block number.
-func (e *EthExtractor) extractOnce(ctx context.Context) (*EthReorgAwareBlockData, bool, error) {
+func (e *EthExtractor) extractOnce(ctx context.Context) (*EthRevertableBlockData, bool, error) {
 	startAt := time.Now()
 
 	// Get the alignment block header to determine the actual target block number to synchronize against.
@@ -219,7 +218,7 @@ func (e *EthExtractor) extractOnce(ctx context.Context) (*EthReorgAwareBlockData
 			detail := fmt.Sprintf(
 				"reorg detected: expected parent hash %s, got %s", bh, blockData.Block.ParentHash,
 			)
-			return NewEthReorgAwareBlockDataWithHeight(bn), false, NewInconsistentChainDataError(detail)
+			return NewEthRevertableBlockDataWithReorg(bn), false, NewInconsistentChainDataError(detail)
 		}
 	} else {
 		// TODO: Support custom reorg check function from users if block hash is missing.
@@ -239,5 +238,5 @@ func (e *EthExtractor) extractOnce(ctx context.Context) (*EthReorgAwareBlockData
 	e.StartBlockNumber++
 	ethMetrics.Qps().UpdateSince(startAt)
 
-	return NewEthReorgAwareBlockData(&blockData), false, nil
+	return NewEthRevertableBlockData(&blockData), false, nil
 }

@@ -11,10 +11,10 @@ import (
 // mockItem is a test type that implements the Sizable interface.
 type mockItem struct {
 	id   int
-	size uint64
+	size int
 }
 
-func (m mockItem) Size() uint64 {
+func (m mockItem) Size() int {
 	return m.size
 }
 
@@ -97,7 +97,7 @@ func TestMemoryBoundedChannelConcurrentSendReceive(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range numItems {
-			mc.Send(mockItem{id: i, size: uint64(50 * i)})
+			mc.Send(mockItem{id: i, size: 50 * i})
 		}
 	}()
 
@@ -108,7 +108,7 @@ func TestMemoryBoundedChannelConcurrentSendReceive(t *testing.T) {
 		for i := range numItems {
 			item := mc.Receive()
 			assert.Equal(t, i, item.id)
-			assert.Equal(t, uint64(50*i), item.Size())
+			assert.Equal(t, 50*i, item.Size())
 		}
 	}()
 
