@@ -10,15 +10,15 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Sized wraps a value with its precomputed memory footprint.
-type Sized[T any] struct {
+// SizedValue wraps a value with its precomputed memory footprint.
+type SizedValue[T any] struct {
 	Value T
 	Size  int
 }
 
-// NewSized constructs a Sized wrapper around a value with an explicitly provided size in bytes.
-func NewSized[T any](value T, bytes int) Sized[T] {
-	return Sized[T]{
+// NewSizedValue constructs a Sized wrapper around a value with an explicitly provided size in bytes.
+func NewSizedValue[T any](value T, bytes int) SizedValue[T] {
+	return SizedValue[T]{
 		Value: value,
 		Size:  bytes,
 	}

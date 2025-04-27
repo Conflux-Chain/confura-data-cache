@@ -71,7 +71,7 @@ func (m *MemoryBoundedChannel[T]) Send(item T) {
 		}
 		m.notFullCond.Wait()
 	}
-	m.enqueue(types.NewSized(item, bytes))
+	m.enqueue(types.NewSizedValue(item, bytes))
 }
 
 // TrySend attempts to send without blocking. Returns false if over memory limit.
@@ -93,7 +93,7 @@ func (m *MemoryBoundedChannel[T]) TrySend(item T) bool {
 	if m.size+bytes > m.capacity && m.buffer.Len() > 0 {
 		return false
 	}
-	m.enqueue(types.NewSized(item, bytes))
+	m.enqueue(types.NewSizedValue(item, bytes))
 	return true
 }
 
@@ -148,7 +148,7 @@ func (m *MemoryBoundedChannel[T]) Closed() bool {
 }
 
 // enqueue adds item and updates memory.
-func (m *MemoryBoundedChannel[T]) enqueue(sitem types.Sized[T]) {
+func (m *MemoryBoundedChannel[T]) enqueue(sitem types.SizedValue[T]) {
 	ethMetrics.DataSize().Update(int64(sitem.Size))
 
 	m.buffer.PushBack(sitem)
@@ -162,7 +162,7 @@ func (m *MemoryBoundedChannel[T]) dequeue() T {
 	elem := m.buffer.Front()
 	m.buffer.Remove(elem)
 
-	sitem := elem.Value.(types.Sized[T])
+	sitem := elem.Value.(types.SizedValue[T])
 	m.size -= sitem.Size
 
 	m.notFullCond.Broadcast()
