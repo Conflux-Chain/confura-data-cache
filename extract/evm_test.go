@@ -74,12 +74,11 @@ func TestEvmExtractIntegration(t *testing.T) {
 
 	data := dataChan.Receive()
 	assert.NotNil(t, data)
-	blockData, reorg := data.Value()
-	assert.Nil(t, reorg)
-	assert.NotNil(t, blockData)
-	assert.NotNil(t, blockData.Block)
-	assert.NotNil(t, blockData.Receipts)
-	assert.NotNil(t, blockData.Traces)
+	assert.Nil(t, data.ReorgHeight)
+	assert.NotNil(t, data.BlockData)
+	assert.NotNil(t, data.BlockData.Block)
+	assert.NotNil(t, data.BlockData.Receipts)
+	assert.NotNil(t, data.BlockData.Traces)
 }
 
 func TestNewEvmExtractor(t *testing.T) {
@@ -231,10 +230,9 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			false,
 			func(result *EthRevertableBlockData) {
 				assert.NotNil(t, result)
-				blockData, reorgHeight := result.Value()
-				assert.NotNil(t, reorgHeight)
-				assert.Nil(t, blockData)
-				assert.Equal(t, uint64(98), *reorgHeight)
+				assert.NotNil(t, result.ReorgHeight)
+				assert.Nil(t, result.BlockData)
+				assert.Equal(t, uint64(98), *result.ReorgHeight)
 			},
 		},
 		{
@@ -287,11 +285,10 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 			false,
 			func(result *EthRevertableBlockData) {
 				assert.NotNil(t, result)
-				blockData, reorgHeight := result.Value()
-				assert.Nil(t, reorgHeight)
-				assert.NotNil(t, blockData)
-				assert.Equal(t, uint64(99), blockData.Block.Number.Uint64())
-				assert.Equal(t, common.HexToHash("0x99"), blockData.Block.Hash)
+				assert.Nil(t, result.ReorgHeight)
+				assert.NotNil(t, result.BlockData)
+				assert.Equal(t, uint64(99), result.BlockData.Block.Number.Uint64())
+				assert.Equal(t, common.HexToHash("0x99"), result.BlockData.Block.Hash)
 			},
 		},
 	}
@@ -366,10 +363,9 @@ func TestEthExtractorStart(t *testing.T) {
 		select {
 		case data := <-resultChan:
 			assert.NotNil(t, data)
-			blockData, reorgHeight := data.Value()
-			assert.Nil(t, reorgHeight)
-			assert.NotNil(t, blockData)
-			assert.Equal(t, uint64(100), blockData.Block.Number.Uint64())
+			assert.Nil(t, data.ReorgHeight)
+			assert.NotNil(t, data.BlockData)
+			assert.Equal(t, uint64(100), data.BlockData.Block.Number.Uint64())
 		case <-time.After(100 * time.Millisecond):
 			t.Fatal("Timed out waiting for block data")
 		}
@@ -401,10 +397,9 @@ func TestEthExtractorCatchUpUntilFinalized(t *testing.T) {
 		select {
 		case data := <-resultChan:
 			assert.NotNil(t, data)
-			blockData, reorgHeight := data.Value()
-			assert.Nil(t, reorgHeight)
-			assert.NotNil(t, blockData)
-			assert.Equal(t, uint64(i), blockData.Block.Number.Uint64())
+			assert.Nil(t, data.ReorgHeight)
+			assert.NotNil(t, data.BlockData)
+			assert.Equal(t, uint64(i), data.BlockData.Block.Number.Uint64())
 		case <-time.After(100 * time.Millisecond):
 			close(resultChan)
 			t.Fatal("Timed out waiting for block data")

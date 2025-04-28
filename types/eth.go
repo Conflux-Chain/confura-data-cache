@@ -10,17 +10,31 @@ import (
 	"github.com/pkg/errors"
 )
 
-// SizedValue wraps a value with its precomputed memory footprint.
-type SizedValue[T any] struct {
+// Sizable represents types that can report their memory footprint.
+type Sizable interface {
+	Size() int
+}
+
+// Sized wraps a value with its precomputed memory footprint.
+type Sized[T any] struct {
 	Value T
 	Size  int
 }
 
-// NewSizedValue constructs a Sized wrapper around a value with an explicitly provided size in bytes.
-func NewSizedValue[T any](value T, bytes int) SizedValue[T] {
-	return SizedValue[T]{
+// NewSized constructs a Sized wrapper around a value with an explicitly provided size in bytes.
+func NewSized[T any](value T, bytes ...int) Sized[T] {
+	calSize := 0
+	if len(bytes) > 0 {
+		calSize = bytes[0]
+	} else if sizable, ok := any(value).(Sizable); ok {
+		calSize = sizable.Size()
+	} else {
+		calSize = size.Of(value)
+	}
+
+	return Sized[T]{
 		Value: value,
-		Size:  bytes,
+		Size:  calSize,
 	}
 }
 

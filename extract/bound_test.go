@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,7 +23,7 @@ func TestMemoryBoundedChannelSendAndReceive(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 1, size: 42}
-	mc.Send(item)
+	mc.Send(types.NewSized(item))
 	assert.Equal(t, 1, mc.Len())
 
 	received := mc.Receive()
@@ -34,7 +35,7 @@ func TestMemoryBoundedChannelTrySendSuccess(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 2, size: 50}
-	ok := mc.TrySend(item)
+	ok := mc.TrySend(types.NewSized(item))
 	assert.True(t, ok)
 
 	out := mc.Receive()
@@ -45,11 +46,11 @@ func TestMemoryBoundedChannelTrySendFailDueToMemoryFull(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 1, size: 2}
-	ok := mc.TrySend(item)
+	ok := mc.TrySend(types.NewSized(item))
 	assert.True(t, ok)
 
 	item = mockItem{id: 2, size: 200}
-	ok = mc.TrySend(item)
+	ok = mc.TrySend(types.NewSized(item))
 	assert.False(t, ok)
 }
 
@@ -57,7 +58,7 @@ func TestMemoryBoundedChannelTryReceive(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 5, size: 30}
-	assert.True(t, mc.TrySend(item))
+	assert.True(t, mc.TrySend(types.NewSized(item)))
 
 	got, ok := mc.TryReceive()
 	assert.True(t, ok)
@@ -76,7 +77,7 @@ func TestMemoryBoundedChannelBlockingSendUnderLimit(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		mc.Send(item)
+		mc.Send(types.NewSized(item))
 	}()
 
 	time.Sleep(50 * time.Millisecond)
@@ -97,7 +98,7 @@ func TestMemoryBoundedChannelConcurrentSendReceive(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range numItems {
-			mc.Send(mockItem{id: i, size: 50 * i})
+			mc.Send(types.NewSized(mockItem{id: i, size: 50 * i}))
 		}
 	}()
 
@@ -125,7 +126,7 @@ func TestMemoryBoundedChannelSendAfterClosePanics(t *testing.T) {
 		}
 	}()
 
-	mc.Send(mockItem{id: 999, size: 10}) // should panic
+	mc.Send(types.NewSized(mockItem{id: 999, size: 10})) // should panic
 }
 
 func TestMemoryBoundedChannelReceiveAfterClose(t *testing.T) {
@@ -133,7 +134,7 @@ func TestMemoryBoundedChannelReceiveAfterClose(t *testing.T) {
 	assert.False(t, mc.Closed())
 
 	item := mockItem{id: 10, size: 30}
-	mc.Send(item)
+	mc.Send(types.NewSized(item))
 
 	// Close channel
 	mc.Close()

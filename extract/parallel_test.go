@@ -32,10 +32,9 @@ func TestEthParallelWorkerParallelDo(t *testing.T) {
 
 	result, err := worker.ParallelDo(context.Background(), 0, 0)
 	assert.NoError(t, err)
-	blockData, reorgHeight := result.Value()
-	assert.Nil(t, reorgHeight)
-	assert.NotNil(t, blockData)
-	assert.Equal(t, &mockData, blockData)
+	assert.Nil(t, result.ReorgHeight)
+	assert.NotNil(t, result.BlockData)
+	assert.Equal(t, &mockData, result.BlockData)
 
 	// test rpc error
 	var buf bytes.Buffer
@@ -71,12 +70,11 @@ func TestParallelWorkerParallelCollect(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), worker.NumCollected())
 
-	resultData := dataChan.Receive()
-	assert.NotNil(t, resultData)
-	blockData, reorgHeight := resultData.Value()
-	assert.Nil(t, reorgHeight)
-	assert.NotNil(t, blockData)
-	assert.Equal(t, mockData, blockData)
+	result := dataChan.Receive()
+	assert.NotNil(t, result)
+	assert.Nil(t, result.ReorgHeight)
+	assert.NotNil(t, result.BlockData)
+	assert.Equal(t, mockData, result.BlockData)
 
 	err = worker.ParallelCollect(context.Background(), &parallel.Result[*EthRevertableBlockData]{Err: errors.New("rpc error")})
 	assert.Error(t, err)
