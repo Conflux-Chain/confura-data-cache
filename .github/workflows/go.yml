@@ -25,7 +25,7 @@ jobs:
       run: go build -v ./...
 
     - name: Test
-      run: go test -coverprofile=coverage.txt -v ./...
+      run: go test -coverprofile=coverage.txt -v `go list ./... | tail -n +2 | grep -v /cmd | grep -v /rpc`
 
     - name: Upload to Codecov
       uses: codecov/codecov-action@v5

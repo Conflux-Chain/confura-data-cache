@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"sync"
 
 	"github.com/Conflux-Chain/confura-data-cache/rpc"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
+	"github.com/Conflux-Chain/go-conflux-util/cmd"
 	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -28,6 +31,9 @@ func init() {
 }
 
 func start(*cobra.Command, []string) {
+	_, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+
 	// create or open leveldb database
 	var storeConfig leveldb.Config
 	viperUtil.MustUnmarshalKey("store.leveldb", &storeConfig)
@@ -38,7 +44,7 @@ func start(*cobra.Command, []string) {
 	defer store.Close()
 	logrus.WithField("config", fmt.Sprintf("%+v", storeConfig)).Info("LevelDB database created or opened")
 
-	// TODO go sync.Run(store)
+	// TODO go sync.Run(ctx, store)
 
 	// serve RPC
 	var rpcConfig rpc.Config
@@ -46,6 +52,6 @@ func start(*cobra.Command, []string) {
 	go rpc.MustServe(rpcConfig, store)
 	logrus.WithField("config", fmt.Sprintf("%+v", rpcConfig)).Info("RPC started")
 
-	// TODO graceful shutdown
-	select {}
+	// wait for terminate signal to shutdown gracefully
+	cmd.GracefulShutdown(&wg, cancel)
 }
