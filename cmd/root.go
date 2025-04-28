@@ -29,15 +29,3 @@ func Execute() {
 		logrus.WithError(err).Fatal("Failed to execute command")
 	}
 }
-
-func fatalOnErr(err error, msg string, fields ...logrus.Fields) {
-	if err == nil {
-		return
-	}
-
-	if len(fields) > 0 {
-		logrus.WithError(err).WithFields(fields[0]).Fatal(msg)
-	} else {
-		logrus.WithError(err).Fatal(msg)
-	}
-}

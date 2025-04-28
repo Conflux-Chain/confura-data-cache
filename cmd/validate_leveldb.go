@@ -7,6 +7,7 @@ import (
 
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/cmd"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/openweb3/web3go"
 	ethTypes "github.com/openweb3/web3go/types"
@@ -38,14 +39,14 @@ func init() {
 
 func validateLeveldb(*cobra.Command, []string) {
 	client, err := web3go.NewClient(validateLeveldbCmdArgs.url)
-	fatalOnErr(err, "Failed to create client")
+	cmd.FatalIfErr(err, "Failed to create client")
 	defer client.Close()
 
 	blockFrom, blockTo := mustNormalizeBlockRange(client, validateLeveldbCmdArgs.blockFrom, validateLeveldbCmdArgs.numBlocks, ethTypes.FinalizedBlockNumber)
 	logrus.WithField("from", blockFrom).WithField("to", blockTo).Info("Block range normalized")
 
 	path, err := os.MkdirTemp("", "confura-data-cache-")
-	fatalOnErr(err, "Failed to create tmp dir")
+	cmd.FatalIfErr(err, "Failed to create tmp dir")
 	defer os.RemoveAll(path)
 
 	config := leveldb.Config{
@@ -53,7 +54,7 @@ func validateLeveldb(*cobra.Command, []string) {
 		DefaultNextBlockNumber: blockFrom,
 	}
 	store, err := leveldb.NewStore(config)
-	fatalOnErr(err, "Failed to create store")
+	cmd.FatalIfErr(err, "Failed to create store")
 	defer store.Close()
 
 	var (
@@ -68,10 +69,10 @@ func validateLeveldb(*cobra.Command, []string) {
 	logrus.Info("Begin to retrieve eth block data from fullnode ...")
 	for i := blockFrom; i <= blockTo; i++ {
 		data, err := types.QueryEthBlockData(client, i)
-		fatalOnErr(err, "Failed to query eth block data")
+		cmd.FatalIfErr(err, "Failed to query eth block data")
 
 		err = store.Write(data)
-		fatalOnErr(err, "Failed to write eth block data to store")
+		cmd.FatalIfErr(err, "Failed to write eth block data to store")
 
 		cache[i] = data
 
@@ -115,7 +116,7 @@ func validateLeveldb(*cobra.Command, []string) {
 
 func mustNormalizeBlockRange(client *web3go.Client, blockFrom int64, numBlocks uint64, latestBlockNumberTag ethTypes.BlockNumber) (uint64, uint64) {
 	latest, err := client.Eth.BlockByNumber(latestBlockNumberTag, false)
-	fatalOnErr(err, "Failed to get latest block")
+	cmd.FatalIfErr(err, "Failed to get latest block")
 
 	// normalize block from
 	var from uint64
@@ -213,13 +214,13 @@ func assertJsonEqual(err error, bn uint64, api string, expected any, actual any,
 		}
 	}
 
-	fatalOnErr(err, "Failed to get data in store", args)
+	cmd.FatalIfErr(err, "Failed to get data in store", args)
 
 	expectedJson, err := json.MarshalIndent(expected, "", "    ")
-	fatalOnErr(err, "Failed to JSON marshal expected value")
+	cmd.FatalIfErr(err, "Failed to JSON marshal expected value")
 
 	actualJson, err := json.MarshalIndent(actual, "", "    ")
-	fatalOnErr(err, "Failed to JSON marshal actual value")
+	cmd.FatalIfErr(err, "Failed to JSON marshal actual value")
 
 	if crypto.Keccak256Hash(expectedJson) != crypto.Keccak256Hash(actualJson) {
 		fmt.Println()
