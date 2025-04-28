@@ -10,9 +10,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// Sizable represents types that can report their memory footprint.
 type Sizable interface {
-	Size() int
+	Size() int // memory size in bytes
 }
 
 // Sized wraps a value with its precomputed memory footprint.
