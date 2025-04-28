@@ -41,18 +41,19 @@ func NewEthCache(config Config) *EthCache {
 }
 
 // Put is used to add near head data to memory cache
-func (c *EthCache) Put(data *types.EthBlockData) error {
+func (c *EthCache) Put(sized *types.Sized[*types.EthBlockData]) error {
 	c.rwMutex.Lock()
 	defer c.rwMutex.Unlock()
 
 	// check block number in sequence
+	data := sized.Value
 	bn := data.Block.Number.Uint64()
 	if c.end > c.start && c.end != bn {
 		return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", c.end, bn)
 	}
 
 	// check if exceeds max memory
-	dataSize := data.Size()
+	dataSize := uint64(sized.Size)
 	for c.end-c.start > 0 && c.currentSize+dataSize > c.config.MaxMemory {
 		c.evict()
 	}
