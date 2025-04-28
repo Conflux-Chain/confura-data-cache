@@ -36,6 +36,10 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 		return types.Lazy[*ethTypes.Block]{}, errors.WithMessage(err, "Failed to unmarshal block")
 	}
 
+	if block == nil {
+		return types.Lazy[*ethTypes.Block]{}, nil
+	}
+
 	txs := block.Transactions.Transactions()
 	if txs == nil {
 		block.Transactions = *ethTypes.NewTxOrHashListByHashes(nil)
