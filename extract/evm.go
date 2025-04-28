@@ -8,6 +8,7 @@ import (
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/web3go"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -100,6 +101,12 @@ func NewEvmExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthE
 	return extractor, nil
 }
 
+// AppendBlockHash appends block number and hash into cache (must be in order).
+// This ensures that a known-good hash exists for future reorg detection.
+func (e *EthExtractor) AppendBlockHash(blockNumber uint64, blockHash common.Hash) error {
+	return e.hashCache.Append(blockNumber, blockHash)
+}
+
 // Start starts the data extraction process. It will block until the context is canceled.
 // It is the caller's responsibility to cancel the context when the extractor is no longer needed.
 // The dataChan is used to send the extracted data to the consumer, which should be buffered to avoid
@@ -117,10 +124,9 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChan
 		default:
 		}
 
-		blockData, caughtUp, err := e.extractOnce(ctx)
-		if err == nil && blockData != nil {
-			ethMetrics.DataSize().Update(int64(blockData.Size()))
-			dataChan.Send(blockData)
+		resultData, caughtUp, err := e.extractOnce(ctx)
+		if resultData != nil {
+			dataChan.Send(types.NewSized(resultData))
 		}
 
 		if err != nil || caughtUp {
@@ -145,6 +151,7 @@ func (e *EthExtractor) catchUpUntilFinalized(ctx context.Context, dataChan *EthM
 			continue
 		}
 		if done {
+			e.hashCache.Flush()
 			return
 		}
 	}
@@ -174,7 +181,7 @@ func (e *EthExtractor) catchUpOnce(ctx context.Context, dataChan *EthMemoryBound
 }
 
 // extractOnce fetches the block data for the current block number.
-func (e *EthExtractor) extractOnce(ctx context.Context) (*types.EthBlockData, bool, error) {
+func (e *EthExtractor) extractOnce(ctx context.Context) (*EthRevertableBlockData, bool, error) {
 	startAt := time.Now()
 
 	// Get the alignment block header to determine the actual target block number to synchronize against.
@@ -211,7 +218,7 @@ func (e *EthExtractor) extractOnce(ctx context.Context) (*types.EthBlockData, bo
 			detail := fmt.Sprintf(
 				"reorg detected: expected parent hash %s, got %s", bh, blockData.Block.ParentHash,
 			)
-			return nil, false, NewInconsistentChainDataError(detail)
+			return NewEthRevertableBlockDataWithReorg(bn), false, NewInconsistentChainDataError(detail)
 		}
 	} else {
 		// TODO: Support custom reorg check function from users if block hash is missing.
@@ -231,5 +238,5 @@ func (e *EthExtractor) extractOnce(ctx context.Context) (*types.EthBlockData, bo
 	e.StartBlockNumber++
 	ethMetrics.Qps().UpdateSince(startAt)
 
-	return &blockData, false, nil
+	return NewEthRevertableBlockData(&blockData), false, nil
 }

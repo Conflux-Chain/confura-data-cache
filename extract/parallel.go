@@ -12,10 +12,10 @@ import (
 )
 
 var (
-	_ parallel.Interface[*types.EthBlockData] = (*EthParallelWorker)(nil)
+	_ parallel.Interface[*EthRevertableBlockData] = (*EthParallelWorker)(nil)
 )
 
-type ParallelWorker[T Sizable] struct {
+type ParallelWorker[T any] struct {
 	start        uint64
 	dataChan     *MemoryBoundedChannel[T]
 	numCollected atomic.Uint64
@@ -28,20 +28,20 @@ func (w *ParallelWorker[T]) NumCollected() uint64 {
 // ParallelCollect implements parallel.Interface.
 func (w *ParallelWorker[T]) ParallelCollect(ctx context.Context, result *parallel.Result[T]) error {
 	if result.Err == nil {
-		w.dataChan.Send(result.Value)
+		w.dataChan.Send(types.NewSized(result.Value))
 		w.numCollected.Add(1)
 	}
 	return result.Err
 }
 
 type EthParallelWorker struct {
-	ParallelWorker[*types.EthBlockData]
+	ParallelWorker[*EthRevertableBlockData]
 	client EthRpcClient
 }
 
 func NewEthParallelWorker(start uint64, dataChan *EthMemoryBoundedChannel, client EthRpcClient) *EthParallelWorker {
 	return &EthParallelWorker{
-		ParallelWorker: ParallelWorker[*types.EthBlockData]{
+		ParallelWorker: ParallelWorker[*EthRevertableBlockData]{
 			start:    start,
 			dataChan: dataChan,
 		},
@@ -50,7 +50,7 @@ func NewEthParallelWorker(start uint64, dataChan *EthMemoryBoundedChannel, clien
 }
 
 // ParallelDo implements parallel.Interface.
-func (w *EthParallelWorker) ParallelDo(ctx context.Context, routine int, task int) (*types.EthBlockData, error) {
+func (w *EthParallelWorker) ParallelDo(ctx context.Context, routine int, task int) (*EthRevertableBlockData, error) {
 	bn := w.start + uint64(task)
 	for {
 		select {
@@ -61,7 +61,7 @@ func (w *EthParallelWorker) ParallelDo(ctx context.Context, routine int, task in
 
 		data, err := w.client.BlockBundleByNumber(ctx, ethTypes.BlockNumber(bn))
 		if err == nil {
-			return &data, nil
+			return NewEthRevertableBlockData(&data), nil
 		}
 		logrus.WithFields(logrus.Fields{
 			"block":   bn,

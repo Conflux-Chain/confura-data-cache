@@ -10,6 +10,33 @@ import (
 	"github.com/pkg/errors"
 )
 
+type Sizable interface {
+	Size() int // memory size in bytes
+}
+
+// Sized wraps a value with its precomputed memory footprint.
+type Sized[T any] struct {
+	Value T
+	Size  int
+}
+
+// NewSized constructs a Sized wrapper around a value with an explicitly provided size in bytes.
+func NewSized[T any](value T, bytes ...int) Sized[T] {
+	calSize := 0
+	if len(bytes) > 0 {
+		calSize = bytes[0]
+	} else if sizable, ok := any(value).(Sizable); ok {
+		calSize = sizable.Size()
+	} else {
+		calSize = size.Of(value)
+	}
+
+	return Sized[T]{
+		Value: value,
+		Size:  calSize,
+	}
+}
+
 // EthBlockData contains all required data in a block.
 type EthBlockData struct {
 	Block    *types.Block

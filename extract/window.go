@@ -38,6 +38,14 @@ func NewBlockHashCacheWithProvider(p FinalizedHeightProvider) *BlockHashCache {
 	}
 }
 
+// Flush clears all the block hashes in the cache.
+func (w *BlockHashCache) Flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.start, w.end = 0, 0
+	w.blockHashes = make(map[uint64]common.Hash)
+}
+
 // Len returns the current number of block hashes in the cache.
 func (w *BlockHashCache) Len() int {
 	w.mu.RLock()
