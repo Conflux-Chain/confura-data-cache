@@ -125,7 +125,6 @@ func (e *EthExtractor) AppendBlockHash(blockNumber uint64, blockHash common.Hash
 // blocking the extractor.
 func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChannel) {
 	defer e.rpcClient.Close()
-	defer dataChan.Close()
 
 	// Catch up to the latest finalized block.
 	e.catchUpUntilFinalized(ctx, dataChan)
