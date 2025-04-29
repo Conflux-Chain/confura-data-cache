@@ -32,16 +32,12 @@ type Config[T any] struct {
 
 	// Optional starting block number for sync.
 	// If not set (i.e., 0), sync will start from the earliest block.
-	StartBlockNumber uint64
-
-	// Size of the internal buffer (in number of blocks) to store fetched block data before processing.
-	// Acts as a channel queue size between data producer and consumer.
-	BufferSize int `default:"200"`
+	StartBlockNumber T
 
 	// Maximum memory (in bytes) the extractor is allowed to use.
 	// If memory usage exceeds this limit, syncing will be paused.
 	// Default is 256MB (268,435,456 bytes).
-	MaxMemoryUsageBytes uint64 `default:"268435456"`
+	MaxMemoryUsageBytes int `default:"268435456"`
 
 	// PollInterval specifies how often to poll for new blocks during normal, steady-state operation.
 	PollInterval time.Duration `default:"1s"`
