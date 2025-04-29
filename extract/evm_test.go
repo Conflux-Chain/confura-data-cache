@@ -156,7 +156,7 @@ func TestNewEvmExtractor(t *testing.T) {
 		assert.Equal(t, common.HexToHash("0x1"), bh)
 	})
 
-	t.Run("NormalizedStartBlockNumber", func(t *testing.T) {
+	t.Run("NormalizedStartBlockNumberOK", func(t *testing.T) {
 		cfg := EthConfig{
 			StartBlockNumber:  ethTypes.FinalizedBlockNumber,
 			TargetBlockNumber: ethTypes.LatestBlockNumber,
@@ -168,6 +168,20 @@ func TestNewEvmExtractor(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotEqual(t, ethTypes.FinalizedBlockNumber, ex.StartBlockNumber)
 		assert.Equal(t, ethTypes.BlockNumber(100), ex.StartBlockNumber)
+	})
+
+	t.Run("NormalizedStartBlockNumberError", func(t *testing.T) {
+		cfg := EthConfig{
+			StartBlockNumber:  ethTypes.FinalizedBlockNumber,
+			TargetBlockNumber: ethTypes.LatestBlockNumber,
+		}
+		c := new(MockEthRpcClient)
+		c.On("BlockHeaderByNumber", mock.Anything, cfg.StartBlockNumber).Return((*ethTypes.Block)(nil), errors.New("rpc error"))
+
+		ex, err := newEthExtractorWithClient(c, cfg)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to normalize start block")
+		assert.Nil(t, ex)
 	})
 }
 
