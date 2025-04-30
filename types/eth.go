@@ -3,49 +3,18 @@ package types
 import (
 	"encoding/json"
 
-	"github.com/DmitriyVTitov/size"
+	"github.com/Conflux-Chain/go-conflux-util/metrics"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/openweb3/web3go"
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 )
 
-type Sizable interface {
-	Size() int // memory size in bytes
-}
-
-// Sized wraps a value with its precomputed memory footprint.
-type Sized[T any] struct {
-	Value T
-	Size  int
-}
-
-// NewSized constructs a Sized wrapper around a value with an explicitly provided size in bytes.
-func NewSized[T any](value T, bytes ...int) Sized[T] {
-	calSize := 0
-	if len(bytes) > 0 {
-		calSize = bytes[0]
-	} else if sizable, ok := any(value).(Sizable); ok {
-		calSize = sizable.Size()
-	} else {
-		calSize = size.Of(value)
-	}
-
-	return Sized[T]{
-		Value: value,
-		Size:  calSize,
-	}
-}
-
 // EthBlockData contains all required data in a block.
 type EthBlockData struct {
 	Block    *types.Block
 	Receipts []types.Receipt
 	Traces   []types.LocalizedTrace
-}
-
-func (d *EthBlockData) Size() uint64 {
-	return uint64(size.Of(d))
 }
 
 func (d *EthBlockData) Verify() error {
@@ -108,10 +77,18 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData,
 		return EthBlockData{}, errors.WithMessage(err, "Failed to get block by number")
 	}
 
+	if block == nil {
+		return EthBlockData{}, errors.Errorf("Cannot find block by number %v", blockNumber)
+	}
+
 	bnoh := types.BlockNumberOrHashWithNumber(bn)
 	receipts, err := client.Parity.BlockReceipts(&bnoh)
 	if err != nil {
 		return EthBlockData{}, errors.WithMessage(err, "Failed to get block receipts")
+	}
+
+	if receipts == nil {
+		return EthBlockData{}, errors.Errorf("Cannot find receipts by block number %v", blockNumber)
 	}
 
 	traces, err := client.Trace.Blocks(bnoh)
@@ -119,11 +96,22 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData,
 		return EthBlockData{}, errors.WithMessage(err, "Failed to get block traces")
 	}
 
-	return EthBlockData{
+	if traces == nil {
+		return EthBlockData{}, errors.Errorf("Cannot find traces by block number %v", blockNumber)
+	}
+
+	metrics.GetOrRegisterHistogram("types/eth/block/txs").Update(int64(len(receipts)))
+	metrics.GetOrRegisterHistogram("types/eth/block/traces").Update(int64(len(traces)))
+
+	data := EthBlockData{
 		Block:    block,
 		Receipts: receipts,
 		Traces:   traces,
-	}, nil
+	}
+
+	metrics.GetOrRegisterHistogram("types/eth/block/size").Update(int64(NewSized(data).Size))
+
+	return data, nil
 }
 
 type BlockHashOrNumber struct {

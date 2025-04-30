@@ -14,15 +14,3 @@ func (m *Metrics) Latest() metrics.Gauge {
 func (m *Metrics) Write() metrics.Timer {
 	return metricsUtil.GetOrRegisterTimer("store/leveldb/write")
 }
-
-func (m *Metrics) NumTxs() metrics.Histogram {
-	return metricsUtil.GetOrRegisterHistogram("store/leveldb/data/txs")
-}
-
-func (m *Metrics) NumTraces() metrics.Histogram {
-	return metricsUtil.GetOrRegisterHistogram("store/leveldb/data/traces")
-}
-
-func (m *Metrics) DataSize() metrics.Histogram {
-	return metricsUtil.GetOrRegisterHistogram("store/leveldb/data/size")
-}
