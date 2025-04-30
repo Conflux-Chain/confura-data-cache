@@ -188,11 +188,6 @@ func (store *Store) Write(data ...types.EthBlockData) error {
 	// add metrics
 	store.metrics.Latest().Update(int64(next - 1))
 	store.metrics.Write().UpdateSince(start)
-	for _, v := range data {
-		store.metrics.NumTxs().Update(int64(len(v.Receipts)))
-		store.metrics.NumTraces().Update(int64(len(v.Traces)))
-		store.metrics.DataSize().Update(int64(v.Size()))
-	}
 
 	return nil
 }

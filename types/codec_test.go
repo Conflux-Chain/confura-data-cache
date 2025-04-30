@@ -73,3 +73,11 @@ func TestLazyByDefault(t *testing.T) {
 	// slice
 	assertLazyByDefault[[]Student](t)
 }
+
+func TestLazyFromStruct(t *testing.T) {
+	s1 := Student{Name: "Wendy", Age: 18}
+
+	lazy, err := NewLazy(s1)
+	assert.Nil(t, err)
+	assert.Equal(t, s1, lazy.MustLoad())
+}

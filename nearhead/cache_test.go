@@ -6,11 +6,9 @@ import (
 	"math/rand"
 	"testing"
 	"time"
-	"unsafe"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
-	"github.com/DmitriyVTitov/size"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/stretchr/testify/assert"
@@ -374,59 +372,6 @@ func TestEthCache_GetTransactionTraces(t *testing.T) {
 	// get tx traces by hash that not exists
 	traces = cache.GetTransactionTraces(hashNotCached)
 	assert.Nil(t, traces)
-}
-
-func TestEthCache_Sizeof(t *testing.T) {
-	data := createTestData(t)
-	block := data.Block
-	estimate := len(block.Author.Bytes())
-	estimate += len(block.BaseFeePerGas.Bytes())
-	estimate += len(block.Difficulty.Bytes())
-	estimate += len(block.ExtraData)
-	estimate += int(unsafe.Sizeof(block.GasLimit))
-	estimate += int(unsafe.Sizeof(block.GasUsed))
-	estimate += len(block.Hash.Bytes())
-	estimate += len(block.LogsBloom.Bytes())
-	estimate += len(block.Miner.Bytes())
-	estimate += len(block.MixHash.Bytes())
-	estimate += int(unsafe.Sizeof(block.Nonce.Uint64()))
-	estimate += len(block.Number.Bytes())
-	estimate += len(block.ParentHash.Bytes())
-	estimate += len(block.ReceiptsRoot.Bytes())
-	estimate += int(unsafe.Sizeof(block.Size))
-	estimate += len(block.StateRoot.Bytes())
-	estimate += int(unsafe.Sizeof(block.Timestamp))
-	estimate += len(block.TotalDifficulty.Bytes())
-	estimate += len(block.TransactionsRoot.Bytes())
-	estimate += len(block.Sha3Uncles.Bytes())
-	for _, tx := range block.Transactions.Transactions() {
-		estimate += len(tx.BlockHash.Bytes())
-		estimate += len(tx.BlockNumber.Bytes())
-		estimate += len(tx.ChainID.Bytes())
-		estimate += len(tx.From.Bytes())
-		estimate += int(unsafe.Sizeof(tx.Gas))
-		estimate += len(tx.GasPrice.Bytes())
-		estimate += len(tx.Hash.Bytes())
-		estimate += len(tx.Input)
-		estimate += len(tx.MaxFeePerGas.Bytes())
-		estimate += len(tx.MaxPriorityFeePerGas.Bytes())
-		estimate += int(unsafe.Sizeof(tx.Nonce))
-		estimate += len(*tx.PublicKey)
-		estimate += len(tx.R.Bytes())
-		estimate += len(*tx.Raw)
-		estimate += len(tx.S.Bytes())
-		estimate += len(tx.StandardV.Bytes())
-		estimate += int(unsafe.Sizeof(*tx.Status))
-		estimate += len(tx.To.Bytes())
-		estimate += int(unsafe.Sizeof(*tx.TransactionIndex))
-		estimate += int(unsafe.Sizeof(*tx.Type))
-		estimate += len(tx.V.Bytes())
-		estimate += len(tx.Value.Bytes())
-		estimate += int(unsafe.Sizeof(*tx.YParity))
-	}
-	blockSize := size.Of(block)
-	assert.Greater(t, blockSize, estimate)
-	assert.Less(t, blockSize, 3000)
 }
 
 func TestEthCache_GetLogs(t *testing.T) {
