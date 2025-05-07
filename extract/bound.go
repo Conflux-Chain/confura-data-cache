@@ -44,7 +44,7 @@ func NewMemoryBoundedChannel[T any](capacity int) *MemoryBoundedChannel[T] {
 	return m
 }
 
-// Send blocks until enough memory is available to buffer the item, or returns an error if the channel is closed.
+// Send blocks until enough memory is available to buffer the item, or returns ErrChannelClosed if the channel is closed.
 func (m *MemoryBoundedChannel[T]) Send(item types.Sized[T]) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -64,7 +64,7 @@ func (m *MemoryBoundedChannel[T]) Send(item types.Sized[T]) error {
 }
 
 // TrySend attempts to send without blocking.
-// It returns false if over memory limit, or an error if the channel is closed.
+// It returns false if over memory limit, or ErrChannelClosed if the channel is closed.
 func (m *MemoryBoundedChannel[T]) TrySend(item types.Sized[T]) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -80,7 +80,7 @@ func (m *MemoryBoundedChannel[T]) TrySend(item types.Sized[T]) (bool, error) {
 	return true, nil
 }
 
-// Receive blocks until an item is available and returns it, or returns an error if the channel is closed.
+// Receive blocks until an item is available and returns it, or returns ErrChannelClosed if the channel is closed.
 func (m *MemoryBoundedChannel[T]) Receive() (v T, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -95,7 +95,7 @@ func (m *MemoryBoundedChannel[T]) Receive() (v T, err error) {
 	return v, ErrChannelClosed
 }
 
-// TryReceive returns an item if available, or false if the channel is empty or an error if the channel is closed.
+// TryReceive returns an item if available, or false if the channel is empty or ErrChannelClosed if the channel is closed.
 func (m *MemoryBoundedChannel[T]) TryReceive() (v T, ok bool, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
