@@ -13,3 +13,17 @@
 #   cors: ["*"]
 #   virtualHosts: ["*"]
 #   jwtSecretHex: 
+
+# Extract configuration
+# extract:
+#   rpcEndpoint:
+#   maxMemoryUsageBytes: 268435456
+#   pollInterval: 1s
+#   serialOption:
+#      routines:
+#      window:
+
+# Nearhead cache configuration
+# cache:
+#   maxMemory: 104857600
+#   maxLogs: 10000

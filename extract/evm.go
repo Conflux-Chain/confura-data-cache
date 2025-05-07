@@ -138,7 +138,9 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChan
 
 		resultData, caughtUp, err := e.extractOnce(ctx)
 		if resultData != nil {
-			dataChan.Send(types.NewSized(resultData))
+			if dataChan.Send(types.NewSized(resultData)) != nil { // channel closed?
+				return
+			}
 		}
 
 		if err != nil || caughtUp {
