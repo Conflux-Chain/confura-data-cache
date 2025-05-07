@@ -26,7 +26,8 @@ func TestMemoryBoundedChannelSendAndReceive(t *testing.T) {
 	mc.Send(types.NewSized(item))
 	assert.Equal(t, 1, mc.Len())
 
-	received := mc.Receive()
+	received, err := mc.Receive()
+	assert.NoError(t, err)
 	assert.Equal(t, item, received)
 	assert.Equal(t, 0, mc.Len())
 }
@@ -35,10 +36,12 @@ func TestMemoryBoundedChannelTrySendSuccess(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 2, size: 50}
-	ok := mc.TrySend(types.NewSized(item))
+	ok, err := mc.TrySend(types.NewSized(item))
+	assert.NoError(t, err)
 	assert.True(t, ok)
 
-	out := mc.Receive()
+	out, err := mc.Receive()
+	assert.NoError(t, err)
 	assert.Equal(t, item, out)
 }
 
@@ -46,11 +49,13 @@ func TestMemoryBoundedChannelTrySendFailDueToMemoryFull(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 1, size: 2}
-	ok := mc.TrySend(types.NewSized(item))
+	ok, err := mc.TrySend(types.NewSized(item))
+	assert.NoError(t, err)
 	assert.True(t, ok)
 
 	item = mockItem{id: 2, size: 200}
-	ok = mc.TrySend(types.NewSized(item))
+	ok, err = mc.TrySend(types.NewSized(item))
+	assert.NoError(t, err)
 	assert.False(t, ok)
 }
 
@@ -58,13 +63,17 @@ func TestMemoryBoundedChannelTryReceive(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
 
 	item := mockItem{id: 5, size: 30}
-	assert.True(t, mc.TrySend(types.NewSized(item)))
+	ok, err := mc.TrySend(types.NewSized(item))
+	assert.NoError(t, err)
+	assert.True(t, ok)
 
-	got, ok := mc.TryReceive()
+	got, ok, err := mc.TryReceive()
+	assert.NoError(t, err)
 	assert.True(t, ok)
 	assert.Equal(t, item, got)
 
-	_, ok = mc.TryReceive()
+	_, ok, err = mc.TryReceive()
+	assert.NoError(t, err)
 	assert.False(t, ok)
 }
 
@@ -81,7 +90,8 @@ func TestMemoryBoundedChannelBlockingSendUnderLimit(t *testing.T) {
 	}()
 
 	time.Sleep(50 * time.Millisecond)
-	got := mc.Receive()
+	got, err := mc.Receive()
+	assert.NoError(t, err)
 	assert.Equal(t, item, got)
 
 	wg.Wait()
@@ -107,7 +117,8 @@ func TestMemoryBoundedChannelConcurrentSendReceive(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range numItems {
-			item := mc.Receive()
+			item, err := mc.Receive()
+			assert.NoError(t, err)
 			assert.Equal(t, i, item.id)
 			assert.Equal(t, 50*i, item.Size())
 		}
@@ -116,17 +127,12 @@ func TestMemoryBoundedChannelConcurrentSendReceive(t *testing.T) {
 	wg.Wait()
 }
 
-func TestMemoryBoundedChannelSendAfterClosePanics(t *testing.T) {
+func TestMemoryBoundedChannelSendAfterClose(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
 	mc.Close()
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("Expected panic when sending to closed channel, but did not panic")
-		}
-	}()
-
-	mc.Send(types.NewSized(mockItem{id: 999, size: 10})) // should panic
+	err := mc.Send(types.NewSized(mockItem{id: 999, size: 10}))
+	assert.ErrorIs(t, err, ErrChannelClosed)
 }
 
 func TestMemoryBoundedChannelReceiveAfterClose(t *testing.T) {
@@ -141,15 +147,18 @@ func TestMemoryBoundedChannelReceiveAfterClose(t *testing.T) {
 	assert.True(t, mc.Closed())
 
 	// Receive should return the last item
-	received := mc.Receive()
+	received, err := mc.Receive()
+	assert.NoError(t, err)
 	assert.Equal(t, item, received)
 
 	// After buffer is empty, Receive should return zero value immediately
-	defaultItem := mc.Receive()
+	defaultItem, err := mc.Receive()
+	assert.ErrorIs(t, err, ErrChannelClosed)
 	assert.Equal(t, mockItem{}, defaultItem)
 
 	// Another TryReceive should return false
-	_, ok := mc.TryReceive()
+	_, ok, err := mc.TryReceive()
+	assert.ErrorIs(t, err, ErrChannelClosed)
 	assert.False(t, ok)
 }
 
@@ -160,7 +169,8 @@ func TestMemoryBoundedChannelCloseWakesBlockedReceive(t *testing.T) {
 
 	go func() {
 		defer close(done)
-		item := mc.Receive()
+		item, err := mc.Receive()
+		assert.ErrorIs(t, err, ErrChannelClosed)
 		// Since channel is closed and empty, we expect zero value
 		assert.Equal(t, mockItem{}, item)
 	}()

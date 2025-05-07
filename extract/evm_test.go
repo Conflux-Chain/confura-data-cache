@@ -72,7 +72,8 @@ func TestEvmExtractIntegration(t *testing.T) {
 	dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
 	go extractor.Start(ctx, dataChan)
 
-	data := dataChan.Receive()
+	data, err := dataChan.Receive()
+	assert.NoError(t, err)
 	assert.NotNil(t, data)
 	assert.Nil(t, data.ReorgHeight)
 	assert.NotNil(t, data.BlockData)
@@ -406,7 +407,9 @@ func TestEthExtractorStart(t *testing.T) {
 
 		resultChan := make(chan *EthRevertableBlockData)
 		go func() {
-			resultChan <- dataChan.Receive()
+			data, err := dataChan.Receive()
+			assert.NoError(t, err)
+			resultChan <- data
 		}()
 
 		select {
@@ -440,7 +443,9 @@ func TestEthExtractorCatchUpUntilFinalized(t *testing.T) {
 	for i := 98; i <= 100; i++ {
 		resultChan := make(chan *EthRevertableBlockData)
 		go func() {
-			resultChan <- dataChan.Receive()
+			data, err := dataChan.Receive()
+			assert.NoError(t, err)
+			resultChan <- data
 		}()
 
 		select {
