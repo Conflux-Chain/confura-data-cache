@@ -96,7 +96,11 @@ func (s *EthSyncer) startNearHeadSync(ctx context.Context, wg *sync.WaitGroup) {
 		case <-ctx.Done():
 			return
 		default:
-			if result, ok := dataChan.TryReceive(); ok {
+			result, ok, err := dataChan.TryReceive()
+			if err != nil { // channel closed?
+				return
+			}
+			if ok {
 				s.processNearhead(result)
 			} else {
 				time.Sleep(time.Millisecond)
@@ -118,7 +122,11 @@ func (s *EthSyncer) startFinalizedSync(ctx context.Context, wg *sync.WaitGroup) 
 		case <-ctx.Done():
 			return
 		default:
-			if result, ok := dataChan.TryReceive(); ok {
+			result, ok, err := dataChan.TryReceive()
+			if err != nil { // channel closed?
+				return
+			}
+			if ok {
 				s.processFinalized(result)
 			} else {
 				time.Sleep(time.Millisecond)
@@ -154,6 +162,7 @@ func (s *EthSyncer) processNearhead(result *extract.EthRevertableBlockData) {
 
 func (s *EthSyncer) processFinalized(result *extract.EthRevertableBlockData) {
 	// Finalized block data will never be reorg-ed
+
 	blockData := result.BlockData
 	for {
 		err := s.store.Write(*blockData)
