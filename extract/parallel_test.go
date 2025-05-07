@@ -70,7 +70,8 @@ func TestParallelWorkerParallelCollect(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, uint64(1), worker.NumCollected())
 
-	result := dataChan.Receive()
+	result, err := dataChan.Receive()
+	assert.NoError(t, err)
 	assert.NotNil(t, result)
 	assert.Nil(t, result.ReorgHeight)
 	assert.NotNil(t, result.BlockData)

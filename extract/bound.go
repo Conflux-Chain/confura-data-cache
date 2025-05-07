@@ -5,6 +5,11 @@ import (
 	"sync"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/pkg/errors"
+)
+
+var (
+	ErrChannelClosed = errors.New("channel closed")
 )
 
 // RevertableBlockData wraps a block data with optional reorg information.
@@ -39,41 +44,44 @@ func NewMemoryBoundedChannel[T any](capacity int) *MemoryBoundedChannel[T] {
 	return m
 }
 
-// Send blocks until enough memory is available to buffer the item.
-func (m *MemoryBoundedChannel[T]) Send(item types.Sized[T]) {
+// Send blocks until enough memory is available to buffer the item, or returns ErrChannelClosed if the channel is closed.
+func (m *MemoryBoundedChannel[T]) Send(item types.Sized[T]) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	for {
 		if m.closed {
-			panic("send on closed channel")
+			return ErrChannelClosed
 		}
 		if !(m.size+item.Size > m.capacity && m.buffer.Len() > 0) {
 			break
 		}
 		m.notFullCond.Wait()
 	}
+
 	m.enqueue(item)
+	return nil
 }
 
-// TrySend attempts to send without blocking. Returns false if over memory limit.
-func (m *MemoryBoundedChannel[T]) TrySend(item types.Sized[T]) bool {
+// TrySend attempts to send without blocking.
+// It returns false if over memory limit, or ErrChannelClosed if the channel is closed.
+func (m *MemoryBoundedChannel[T]) TrySend(item types.Sized[T]) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.closed {
-		panic("send on closed channel")
+		return false, ErrChannelClosed
 	}
 
 	if m.size+item.Size > m.capacity && m.buffer.Len() > 0 {
-		return false
+		return false, nil
 	}
 	m.enqueue(item)
-	return true
+	return true, nil
 }
 
-// Receive blocks until an item is available and returns it.
-func (m *MemoryBoundedChannel[T]) Receive() (v T) {
+// Receive blocks until an item is available and returns it, or returns ErrChannelClosed if the channel is closed.
+func (m *MemoryBoundedChannel[T]) Receive() (v T, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -82,18 +90,21 @@ func (m *MemoryBoundedChannel[T]) Receive() (v T) {
 	}
 
 	if m.buffer.Len() > 0 {
-		return m.dequeue()
+		return m.dequeue(), nil
 	}
-	return
+	return v, ErrChannelClosed
 }
 
-// TryReceive returns an item if available, otherwise false.
-func (m *MemoryBoundedChannel[T]) TryReceive() (v T, ok bool) {
+// TryReceive returns an item if available, or false if the channel is empty or ErrChannelClosed if the channel is closed.
+func (m *MemoryBoundedChannel[T]) TryReceive() (v T, ok bool, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if m.buffer.Len() > 0 {
-		v, ok = m.dequeue(), true
+		return m.dequeue(), true, nil
+	}
+	if m.closed {
+		err = ErrChannelClosed
 	}
 	return
 }
