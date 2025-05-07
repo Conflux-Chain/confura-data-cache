@@ -22,7 +22,7 @@ type EthCache struct {
 
 	start                  uint64 // the first block number, inclusive
 	end                    uint64 // the last block number, exclusive
-	blockNumber2BlockDatas map[uint64]*types.EthBlockData
+	blockNumber2BlockDatas map[uint64]*EthBlockDataLazy
 	blockHash2BlockNumbers map[common.Hash]uint64
 	txHash2TxIndexes       map[common.Hash]TransactionIndex
 
@@ -33,7 +33,7 @@ type EthCache struct {
 func NewEthCache(config Config) *EthCache {
 	return &EthCache{
 		config:                 config,
-		blockNumber2BlockDatas: make(map[uint64]*types.EthBlockData),
+		blockNumber2BlockDatas: make(map[uint64]*EthBlockDataLazy),
 		blockHash2BlockNumbers: make(map[common.Hash]uint64),           // mapping from block hash to number, for query by block hash
 		txHash2TxIndexes:       make(map[common.Hash]TransactionIndex), // mapping from tx hash to block number and tx index, for query by tx hash
 		blockNumber2BlockSize:  make(map[uint64]uint64),                // mapping from block number to block data size
@@ -58,12 +58,18 @@ func (c *EthCache) Put(sized *types.Sized[*types.EthBlockData]) error {
 		c.evict()
 	}
 
+	// encode block
+	dataLazy, err := NewEthBlockDataLazy(data)
+	if err != nil {
+		return errors.Errorf("Block data not cached in sequence, expected = %v, actual = %v", c.end, bn)
+	}
+
 	// push data
 	if c.start == c.end {
 		c.start = bn
 	}
 	c.end = bn + uint64(1)
-	c.blockNumber2BlockDatas[bn] = data
+	c.blockNumber2BlockDatas[bn] = dataLazy
 	c.blockHash2BlockNumbers[data.Block.Hash] = bn
 	for i, tx := range data.Block.Transactions.Transactions() {
 		c.txHash2TxIndexes[tx.Hash] = TransactionIndex{
@@ -105,15 +111,17 @@ func (c *EthCache) evict() {
 }
 
 func (c *EthCache) del(bn uint64) {
-	data, exists := c.blockNumber2BlockDatas[bn]
+	dataLazy, exists := c.blockNumber2BlockDatas[bn]
 	if !exists {
 		return
 	}
 
+	block := dataLazy.Block.MustLoad()
+
 	// evict data
 	delete(c.blockNumber2BlockDatas, bn)
-	delete(c.blockHash2BlockNumbers, data.Block.Hash)
-	txs := data.Block.Transactions.Transactions()
+	delete(c.blockHash2BlockNumbers, block.Hash)
+	txs := block.Transactions.Transactions()
 	for _, tx := range txs {
 		delete(c.txHash2TxIndexes, tx.Hash)
 	}
@@ -125,34 +133,37 @@ func (c *EthCache) del(bn uint64) {
 }
 
 // GetBlock returns block with given number or hash.
-func (c *EthCache) GetBlock(bhon types.BlockHashOrNumber, isFull bool) *ethTypes.Block {
+func (c *EthCache) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[*ethTypes.Block], error) {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
 
 	blockNumber := c.getBlockNumber(bhon)
 	if blockNumber == nil {
-		return nil
+		return types.Lazy[*ethTypes.Block]{}, nil
 	}
 
 	data, exists := c.blockNumber2BlockDatas[*blockNumber]
 	if !exists {
-		return nil
+		return types.Lazy[*ethTypes.Block]{}, nil
 	}
 
 	if isFull {
-		return data.Block
+		return data.Block, nil
 	}
 
-	txs := data.Block.Transactions.Transactions()
+	blk := data.Block.MustLoad()
+
+	txs := blk.Transactions.Transactions()
 	hashes := make([]common.Hash, len(txs))
 	for i, tx := range txs {
 		hashes[i] = tx.Hash
 	}
 	txOrHashList := ethTypes.NewTxOrHashListByHashes(hashes)
 
-	block := *data.Block
+	block := *blk
 	block.Transactions = *txOrHashList
-	return &block
+
+	return types.NewLazy(&block)
 }
 
 // GetTransactionByHash returns transaction with given transaction hash.
@@ -170,7 +181,9 @@ func (c *EthCache) GetTransactionByHash(txHash common.Hash) *ethTypes.Transactio
 		return nil
 	}
 
-	tx := data.Block.Transactions.Transactions()[txIndex.transactionIndex]
+	block := data.Block.MustLoad()
+
+	tx := block.Transactions.Transactions()[txIndex.transactionIndex]
 	return &tx
 }
 
@@ -379,4 +392,23 @@ type EthLogs struct {
 	FromBlock uint64
 	ToBlock   uint64
 	Logs      []ethTypes.Log
+}
+
+type EthBlockDataLazy struct {
+	Block    types.Lazy[*ethTypes.Block]
+	Receipts []ethTypes.Receipt
+	Traces   []ethTypes.LocalizedTrace
+}
+
+func NewEthBlockDataLazy(blockdata *types.EthBlockData) (*EthBlockDataLazy, error) {
+	blockLazy, err := types.NewLazy(blockdata.Block)
+	if err != nil {
+		return nil, err
+	}
+
+	return &EthBlockDataLazy{
+		Block:    blockLazy,
+		Receipts: blockdata.Receipts,
+		Traces:   blockdata.Traces,
+	}, nil
 }

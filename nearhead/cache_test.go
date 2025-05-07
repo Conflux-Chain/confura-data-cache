@@ -221,22 +221,25 @@ func TestEthCache_GetBlockByHash(t *testing.T) {
 
 	// get block by hash with tx details
 
-	block := cache.GetBlock(types.BlockHashOrNumberWithHex("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), false)
+	block, err := cache.GetBlock(types.BlockHashOrNumberWithHex("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), false)
+	assert.Nil(t, err)
 	assert.NotNil(t, block)
-	assert.Equal(t, uint64(120177555), block.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), block.Hash)
-	assert.Len(t, block.Transactions.Hashes(), 1)
+	assert.Equal(t, uint64(120177555), block.MustLoad().Number.Uint64())
+	assert.Equal(t, common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), block.MustLoad().Hash)
+	assert.Len(t, block.MustLoad().Transactions.Hashes(), 1)
 
 	// get block by hash with tx hashes
-	block = cache.GetBlock(types.BlockHashOrNumberWithHex("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), true)
+	block, err = cache.GetBlock(types.BlockHashOrNumberWithHex("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), true)
+	assert.Nil(t, err)
 	assert.NotNil(t, block)
-	assert.Equal(t, uint64(120177555), block.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), block.Hash)
-	assert.Len(t, block.Transactions.Transactions(), 1)
+	assert.Equal(t, uint64(120177555), block.MustLoad().Number.Uint64())
+	assert.Equal(t, common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), block.MustLoad().Hash)
+	assert.Len(t, block.MustLoad().Transactions.Transactions(), 1)
 
 	// get block by hash that not exists
-	block = cache.GetBlock(types.BlockHashOrNumberWithHash(hashNotCached), false)
-	assert.Nil(t, block)
+	block, err = cache.GetBlock(types.BlockHashOrNumberWithHash(hashNotCached), false)
+	assert.Nil(t, err)
+	assert.Nil(t, block.MustLoad())
 }
 
 func TestEthCache_GetBlockByNumber(t *testing.T) {
@@ -245,23 +248,26 @@ func TestEthCache_GetBlockByNumber(t *testing.T) {
 	data := types.NewSized(blockData)
 	assert.Nil(t, cache.Put(&data))
 
-	// get block by number with tx details
-	block := cache.GetBlock(types.BlockHashOrNumberWithNumber(120177555), false)
-	assert.NotNil(t, block)
-	assert.Equal(t, uint64(120177555), block.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), block.Hash)
-	assert.Len(t, block.Transactions.Hashes(), 1)
-
 	// get block by number with tx hashes
-	block = cache.GetBlock(types.BlockHashOrNumberWithNumber(120177555), true)
+	block, err := cache.GetBlock(types.BlockHashOrNumberWithNumber(120177555), false)
+	assert.Nil(t, err)
 	assert.NotNil(t, block)
-	assert.Equal(t, uint64(120177555), block.Number.Uint64())
-	assert.Equal(t, common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), block.Hash)
-	assert.Len(t, block.Transactions.Transactions(), 1)
+	assert.Equal(t, uint64(120177555), block.MustLoad().Number.Uint64())
+	assert.Equal(t, common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), block.MustLoad().Hash)
+	assert.Len(t, block.MustLoad().Transactions.Hashes(), 1)
+
+	// get block by number with tx details
+	block, err = cache.GetBlock(types.BlockHashOrNumberWithNumber(120177555), true)
+	assert.Nil(t, err)
+	assert.NotNil(t, block)
+	assert.Equal(t, uint64(120177555), block.MustLoad().Number.Uint64())
+	assert.Equal(t, common.HexToHash("0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6"), block.MustLoad().Hash)
+	assert.Len(t, block.MustLoad().Transactions.Transactions(), 1)
 
 	// get block by number that not exists
-	block = cache.GetBlock(types.BlockHashOrNumberWithNumber(bnNotCached), false)
-	assert.Nil(t, block)
+	block, err = cache.GetBlock(types.BlockHashOrNumberWithNumber(bnNotCached), false)
+	assert.Nil(t, err)
+	assert.Nil(t, block.MustLoad())
 }
 
 func TestEthCache_GetTransactionByHash(t *testing.T) {
