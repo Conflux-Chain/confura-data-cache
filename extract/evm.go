@@ -74,7 +74,7 @@ type EthExtractor struct {
 	rpcClient EthRpcClient    // Connected RPC client for fetching blockchain data
 }
 
-func NewEvmExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthExtractor, error) {
+func NewEthExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthExtractor, error) {
 	if len(conf.RpcEndpoint) == 0 {
 		return nil, errors.New("no rpc endpoint provided")
 	}
@@ -85,6 +85,18 @@ func NewEvmExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthE
 	}
 
 	rpcClient := &Web3ClientAdapter{client}
+	return newEthExtractorWithClient(rpcClient, conf, provider...)
+}
+
+func newEthExtractorWithClient(rpcClient EthRpcClient, conf EthConfig, provider ...FinalizedHeightProvider) (*EthExtractor, error) {
+	// Normalize start block number if necessary
+	if conf.StartBlockNumber <= 0 {
+		block, err := rpcClient.BlockHeaderByNumber(context.Background(), conf.StartBlockNumber)
+		if err != nil {
+			return nil, errors.WithMessage(err, "failed to normalize start block")
+		}
+		conf.StartBlockNumber = ethTypes.BlockNumber(block.Number.Int64())
+	}
 
 	var finalizeProvider FinalizedHeightProvider
 	if len(provider) > 0 {
@@ -163,16 +175,16 @@ func (e *EthExtractor) catchUpOnce(ctx context.Context, dataChan *EthMemoryBound
 		return errors.WithMessage(err, "failed to get finalized block"), false
 	}
 
-	finalizedBlockNumber := latestFinalizedBlock.Number.Uint64()
+	finalizedBlockNumber := ethTypes.BlockNumber(latestFinalizedBlock.Number.Int64())
 	if e.StartBlockNumber > finalizedBlockNumber {
 		return nil, true
 	}
 
-	worker := NewEthParallelWorker(e.StartBlockNumber, dataChan, e.rpcClient)
+	worker := NewEthParallelWorker(uint64(e.StartBlockNumber), dataChan, e.rpcClient)
 	numTasks := finalizedBlockNumber - e.StartBlockNumber + 1
 
 	err = parallel.Serial(ctx, worker, int(numTasks), e.SerialOption)
-	e.StartBlockNumber += worker.NumCollected()
+	e.StartBlockNumber += ethTypes.BlockNumber(worker.NumCollected())
 	if err != nil {
 		return err, false
 	}
@@ -194,7 +206,7 @@ func (e *EthExtractor) extractOnce(ctx context.Context) (*EthRevertableBlockData
 	}
 
 	// Check if we are already caught up.
-	if e.StartBlockNumber > targetBlock.Number.Uint64() {
+	if e.StartBlockNumber > ethTypes.BlockNumber(targetBlock.Number.Int64()) {
 		return nil, true, nil
 	}
 
@@ -212,7 +224,7 @@ func (e *EthExtractor) extractOnce(ctx context.Context) (*EthRevertableBlockData
 	// Check for reorgs by comparing the block parent hash with the hashes in the hash window.
 	if bn, bh, ok := e.hashCache.Latest(); ok {
 		if bh != blockData.Block.ParentHash { // reorg detected
-			e.StartBlockNumber = bn
+			e.StartBlockNumber = ethTypes.BlockNumber(bn)
 			e.hashCache.Pop()
 
 			detail := fmt.Sprintf(
