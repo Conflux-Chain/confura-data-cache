@@ -2,7 +2,6 @@ package extract
 
 import (
 	"container/list"
-	"context"
 	"sync"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
@@ -28,6 +27,8 @@ type MemoryBoundedChannel[T any] struct {
 	notFullCond  *sync.Cond // signals when memory is not full
 	notEmptyCond *sync.Cond // signals when buffer is not empty
 	closed       bool       // closed flag
+	proxyChan    chan T     // native proxy channel for convenience use
+	proxyOncer   sync.Once  // ensures proxy channel is created only once
 }
 
 // NewMemoryBoundedChannel creates a new memory-bounded channel.
@@ -135,28 +136,21 @@ func (m *MemoryBoundedChannel[T]) Closed() bool {
 }
 
 // RChan returns a read-only channel that receives items from the memory-bounded channel.
-func (m *MemoryBoundedChannel[T]) RChan(ctx context.Context) <-chan T {
-	ch := make(chan T)
-	go func() {
-		defer close(ch)
-		for {
-			item, err := m.Receive()
-			if err != nil { // channel closed
-				return
-			}
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				select {
-				case <-ctx.Done():
+func (m *MemoryBoundedChannel[T]) RChan() <-chan T {
+	m.proxyOncer.Do(func() {
+		m.proxyChan = make(chan T)
+		go func() {
+			defer close(m.proxyChan)
+			for {
+				item, err := m.Receive()
+				if err != nil { // channel closed
 					return
-				case ch <- item:
 				}
+				m.proxyChan <- item
 			}
-		}
-	}()
-	return ch
+		}()
+	})
+	return m.proxyChan
 }
 
 // enqueue adds item and updates memory.

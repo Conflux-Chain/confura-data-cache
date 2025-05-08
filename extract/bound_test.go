@@ -1,7 +1,6 @@
 package extract
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -216,7 +215,7 @@ func TestMemoryBoundedChannelRChan(t *testing.T) {
 		mc.Send(types.NewSized(item))
 		assert.Equal(t, 1, mc.Len())
 
-		received, ok := <-mc.RChan(context.Background())
+		received, ok := <-mc.RChan()
 		assert.True(t, ok)
 		assert.Equal(t, item, received)
 		assert.Equal(t, 0, mc.Len())
@@ -233,48 +232,13 @@ func TestMemoryBoundedChannelRChan(t *testing.T) {
 		assert.Equal(t, 1, mc.Len())
 
 		// Attempt to receive from the closed channel
-		received, ok := <-mc.RChan(context.Background())
+		received, ok := <-mc.RChan()
 		assert.True(t, ok)
 		assert.Equal(t, item, received)
 		assert.Equal(t, 0, mc.Len())
 
 		// Attempt to receive from the empty closed channel again
-		received, ok = <-mc.RChan(context.Background())
-		assert.False(t, ok)
-		assert.Equal(t, mockItem{}, received)
-		assert.Equal(t, 0, mc.Len())
-	})
-
-	t.Run("RChanContextCanceledImmediately", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel() // Cancel the context immediately
-
-		mc := NewMemoryBoundedChannel[mockItem](100)
-		item := mockItem{id: 1, size: 42}
-		mc.Send(types.NewSized(item))
-		assert.Equal(t, 1, mc.Len())
-
-		received, ok := <-mc.RChan(ctx)
-		assert.False(t, ok)
-		assert.Equal(t, mockItem{}, received)
-		assert.Equal(t, 0, mc.Len())
-	})
-
-	t.Run("RChanContextCanceledIntermediately", func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-
-		mc := NewMemoryBoundedChannel[mockItem](100)
-		item := mockItem{id: 1, size: 42}
-		mc.Send(types.NewSized(item))
-		assert.Equal(t, 1, mc.Len())
-
-		ch := mc.RChan(ctx)
-
-		time.Sleep(time.Millisecond)
-		cancel() // Cancel the context
-		time.Sleep(time.Millisecond)
-
-		received, ok := <-ch
+		received, ok = <-mc.RChan()
 		assert.False(t, ok)
 		assert.Equal(t, mockItem{}, received)
 		assert.Equal(t, 0, mc.Len())
