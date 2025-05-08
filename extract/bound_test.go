@@ -1,6 +1,7 @@
 package extract
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -56,6 +57,16 @@ func TestMemoryBoundedChannelTrySendFailDueToMemoryFull(t *testing.T) {
 	item = mockItem{id: 2, size: 200}
 	ok, err = mc.TrySend(types.NewSized(item))
 	assert.NoError(t, err)
+	assert.False(t, ok)
+}
+
+func TestMemoryBoundedChannelTrySendClosed(t *testing.T) {
+	mc := NewMemoryBoundedChannel[mockItem](100)
+	mc.Close()
+
+	item := mockItem{id: 1, size: 2}
+	ok, err := mc.TrySend(types.NewSized(item))
+	assert.ErrorIs(t, err, ErrChannelClosed)
 	assert.False(t, ok)
 }
 
@@ -196,4 +207,76 @@ func TestMemoryBoundedChannelCloseIsIdempotent(t *testing.T) {
 	mc.Close()
 	mc.Close()
 	mc.Close()
+}
+
+func TestMemoryBoundedChannelRChan(t *testing.T) {
+	t.Run("RChanReadOk", func(t *testing.T) {
+		mc := NewMemoryBoundedChannel[mockItem](100)
+		item := mockItem{id: 1, size: 42}
+		mc.Send(types.NewSized(item))
+		assert.Equal(t, 1, mc.Len())
+
+		received, ok := <-mc.RChan(context.Background())
+		assert.True(t, ok)
+		assert.Equal(t, item, received)
+		assert.Equal(t, 0, mc.Len())
+	})
+
+	t.Run("RchanReadClosed", func(t *testing.T) {
+		mc := NewMemoryBoundedChannel[mockItem](100)
+		item := mockItem{id: 1, size: 10}
+		mc.Send(types.NewSized(item))
+		assert.Equal(t, 1, mc.Len())
+
+		// Close the channel
+		mc.Close()
+		assert.Equal(t, 1, mc.Len())
+
+		// Attempt to receive from the closed channel
+		received, ok := <-mc.RChan(context.Background())
+		assert.True(t, ok)
+		assert.Equal(t, item, received)
+		assert.Equal(t, 0, mc.Len())
+
+		// Attempt to receive from the empty closed channel again
+		received, ok = <-mc.RChan(context.Background())
+		assert.False(t, ok)
+		assert.Equal(t, mockItem{}, received)
+		assert.Equal(t, 0, mc.Len())
+	})
+
+	t.Run("RChanContextCanceledImmediately", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancel the context immediately
+
+		mc := NewMemoryBoundedChannel[mockItem](100)
+		item := mockItem{id: 1, size: 42}
+		mc.Send(types.NewSized(item))
+		assert.Equal(t, 1, mc.Len())
+
+		received, ok := <-mc.RChan(ctx)
+		assert.False(t, ok)
+		assert.Equal(t, mockItem{}, received)
+		assert.Equal(t, 0, mc.Len())
+	})
+
+	t.Run("RChanContextCanceledIntermediately", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+
+		mc := NewMemoryBoundedChannel[mockItem](100)
+		item := mockItem{id: 1, size: 42}
+		mc.Send(types.NewSized(item))
+		assert.Equal(t, 1, mc.Len())
+
+		ch := mc.RChan(ctx)
+
+		time.Sleep(time.Millisecond)
+		cancel() // Cancel the context
+		time.Sleep(time.Millisecond)
+
+		received, ok := <-ch
+		assert.False(t, ok)
+		assert.Equal(t, mockItem{}, received)
+		assert.Equal(t, 0, mc.Len())
+	})
 }

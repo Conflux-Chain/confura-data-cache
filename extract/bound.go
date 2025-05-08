@@ -2,6 +2,7 @@ package extract
 
 import (
 	"container/list"
+	"context"
 	"sync"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
@@ -131,6 +132,31 @@ func (m *MemoryBoundedChannel[T]) Closed() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.closed
+}
+
+// RChan returns a read-only channel that receives items from the memory-bounded channel.
+func (m *MemoryBoundedChannel[T]) RChan(ctx context.Context) <-chan T {
+	ch := make(chan T)
+	go func() {
+		defer close(ch)
+		for {
+			item, err := m.Receive()
+			if err != nil { // channel closed
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				select {
+				case <-ctx.Done():
+					return
+				case ch <- item:
+				}
+			}
+		}
+	}()
+	return ch
 }
 
 // enqueue adds item and updates memory.
