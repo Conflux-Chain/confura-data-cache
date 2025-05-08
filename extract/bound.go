@@ -38,8 +38,9 @@ func NewMemoryBoundedChannel[T any](capacity int) *MemoryBoundedChannel[T] {
 	}
 
 	m := &MemoryBoundedChannel[T]{
-		capacity: capacity,
-		buffer:   list.New(),
+		capacity:  capacity,
+		buffer:    list.New(),
+		proxyChan: make(chan T),
 	}
 	m.notFullCond = sync.NewCond(&m.mu)
 	m.notEmptyCond = sync.NewCond(&m.mu)
@@ -138,7 +139,6 @@ func (m *MemoryBoundedChannel[T]) Closed() bool {
 // RChan returns a read-only channel that receives items from the memory-bounded channel.
 func (m *MemoryBoundedChannel[T]) RChan() <-chan T {
 	m.proxyOncer.Do(func() {
-		m.proxyChan = make(chan T)
 		go func() {
 			defer close(m.proxyChan)
 			for {
