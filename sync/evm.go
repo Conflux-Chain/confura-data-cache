@@ -38,9 +38,10 @@ type EthCache interface {
 
 type EthSyncer struct {
 	extract.EthConfig
-	store                                 EthStore
-	cache                                 EthCache
-	finalizedExtractor, nearheadExtractor EthExtractor
+	store              EthStore
+	cache              EthCache
+	finalizedExtractor EthExtractor
+	nearheadExtractor  EthExtractor
 }
 
 func NewEthSyncer(conf extract.EthConfig, cache *nearhead.EthCache, store *leveldb.Store) (*EthSyncer, error) {
@@ -95,15 +96,9 @@ func (s *EthSyncer) startNearHeadSync(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			return
-		default:
-			result, ok, err := dataChan.TryReceive()
-			if err != nil { // channel closed?
-				return
-			}
+		case res, ok := <-dataChan.RChan():
 			if ok {
-				s.processNearhead(result)
-			} else {
-				time.Sleep(time.Millisecond)
+				s.processNearhead(res)
 			}
 		}
 	}
@@ -121,15 +116,9 @@ func (s *EthSyncer) startFinalizedSync(ctx context.Context, wg *sync.WaitGroup) 
 		select {
 		case <-ctx.Done():
 			return
-		default:
-			result, ok, err := dataChan.TryReceive()
-			if err != nil { // channel closed?
-				return
-			}
+		case res, ok := <-dataChan.RChan():
 			if ok {
-				s.processFinalized(result)
-			} else {
-				time.Sleep(time.Millisecond)
+				s.processFinalized(res)
 			}
 		}
 	}
