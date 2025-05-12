@@ -59,6 +59,16 @@ func TestMemoryBoundedChannelTrySendFailDueToMemoryFull(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestMemoryBoundedChannelTrySendClosed(t *testing.T) {
+	mc := NewMemoryBoundedChannel[mockItem](100)
+	mc.Close()
+
+	item := mockItem{id: 1, size: 2}
+	ok, err := mc.TrySend(types.NewSized(item))
+	assert.ErrorIs(t, err, ErrChannelClosed)
+	assert.False(t, ok)
+}
+
 func TestMemoryBoundedChannelTryReceive(t *testing.T) {
 	mc := NewMemoryBoundedChannel[mockItem](100)
 
@@ -196,4 +206,41 @@ func TestMemoryBoundedChannelCloseIsIdempotent(t *testing.T) {
 	mc.Close()
 	mc.Close()
 	mc.Close()
+}
+
+func TestMemoryBoundedChannelRChan(t *testing.T) {
+	t.Run("RChanReadOk", func(t *testing.T) {
+		mc := NewMemoryBoundedChannel[mockItem](100)
+		item := mockItem{id: 1, size: 42}
+		mc.Send(types.NewSized(item))
+		assert.Equal(t, 1, mc.Len())
+
+		received, ok := <-mc.RChan()
+		assert.True(t, ok)
+		assert.Equal(t, item, received)
+		assert.Equal(t, 0, mc.Len())
+	})
+
+	t.Run("RchanReadClosed", func(t *testing.T) {
+		mc := NewMemoryBoundedChannel[mockItem](100)
+		item := mockItem{id: 1, size: 10}
+		mc.Send(types.NewSized(item))
+		assert.Equal(t, 1, mc.Len())
+
+		// Attempt to receive from the channel
+		received, ok := <-mc.RChan()
+		assert.True(t, ok)
+		assert.Equal(t, item, received)
+		assert.Equal(t, 0, mc.Len())
+
+		// Close the channel
+		mc.Close()
+		assert.Equal(t, 0, mc.Len())
+
+		// Attempt to receive from the empty closed channel again
+		received, ok = <-mc.RChan()
+		assert.False(t, ok)
+		assert.Equal(t, mockItem{}, received)
+		assert.Equal(t, 0, mc.Len())
+	})
 }

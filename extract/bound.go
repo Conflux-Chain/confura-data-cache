@@ -3,6 +3,7 @@ package extract
 import (
 	"container/list"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/pkg/errors"
@@ -21,12 +22,15 @@ type RevertableBlockData[T any] struct {
 // MemoryBoundedChannel wraps a memory-bounded channel.
 type MemoryBoundedChannel[T any] struct {
 	mu           sync.RWMutex
-	size         int        // current memory size used by buffered items
-	capacity     int        // memory limit in bytes
-	buffer       *list.List // buffered items to receive (FIFO)
-	notFullCond  *sync.Cond // signals when memory is not full
-	notEmptyCond *sync.Cond // signals when buffer is not empty
-	closed       bool       // closed flag
+	size         int         // current memory size used by buffered items
+	capacity     int         // memory limit in bytes
+	buffer       *list.List  // buffered items to receive (FIFO)
+	notFullCond  *sync.Cond  // signals when memory is not full
+	notEmptyCond *sync.Cond  // signals when buffer is not empty
+	closed       bool        // closed flag
+	proxyChan    chan T      // native proxy channel for convenience use
+	proxyOncer   sync.Once   // ensures proxy channel is created only once
+	proxyStarted atomic.Bool // indicates if the proxy channel has started
 }
 
 // NewMemoryBoundedChannel creates a new memory-bounded channel.
@@ -36,8 +40,9 @@ func NewMemoryBoundedChannel[T any](capacity int) *MemoryBoundedChannel[T] {
 	}
 
 	m := &MemoryBoundedChannel[T]{
-		capacity: capacity,
-		buffer:   list.New(),
+		capacity:  capacity,
+		buffer:    list.New(),
+		proxyChan: make(chan T),
 	}
 	m.notFullCond = sync.NewCond(&m.mu)
 	m.notEmptyCond = sync.NewCond(&m.mu)
@@ -119,11 +124,18 @@ func (m *MemoryBoundedChannel[T]) Len() int {
 func (m *MemoryBoundedChannel[T]) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !m.closed {
-		m.closed = true
-		m.notEmptyCond.Broadcast()
-		m.notFullCond.Broadcast()
+
+	if m.closed { // already closed
+		return
 	}
+
+	m.closed = true
+	if !m.proxyStarted.Load() {
+		close(m.proxyChan)
+	}
+
+	m.notEmptyCond.Broadcast()
+	m.notFullCond.Broadcast()
 }
 
 // Closed returns true if the channel is closed.
@@ -131,6 +143,24 @@ func (m *MemoryBoundedChannel[T]) Closed() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.closed
+}
+
+// RChan returns a read-only channel that receives items from the memory-bounded channel.
+func (m *MemoryBoundedChannel[T]) RChan() <-chan T {
+	m.proxyOncer.Do(func() {
+		m.proxyStarted.Store(true)
+		go func() {
+			defer close(m.proxyChan)
+			for {
+				item, err := m.Receive()
+				if err != nil { // channel closed
+					return
+				}
+				m.proxyChan <- item
+			}
+		}()
+	})
+	return m.proxyChan
 }
 
 // enqueue adds item and updates memory.
