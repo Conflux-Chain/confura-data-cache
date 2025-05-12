@@ -227,14 +227,14 @@ func TestMemoryBoundedChannelRChan(t *testing.T) {
 		mc.Send(types.NewSized(item))
 		assert.Equal(t, 1, mc.Len())
 
-		// Close the channel
-		mc.Close()
-		assert.Equal(t, 1, mc.Len())
-
-		// Attempt to receive from the closed channel
+		// Attempt to receive from the channel
 		received, ok := <-mc.RChan()
 		assert.True(t, ok)
 		assert.Equal(t, item, received)
+		assert.Equal(t, 0, mc.Len())
+
+		// Close the channel
+		mc.Close()
 		assert.Equal(t, 0, mc.Len())
 
 		// Attempt to receive from the empty closed channel again
