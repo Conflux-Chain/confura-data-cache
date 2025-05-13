@@ -145,11 +145,16 @@ func TestEthSyncerProcessFinalized(t *testing.T) {
 			Block: makeMockBlock(123, "0x123"),
 		}
 
-		store.On("Write", []types.EthBlockData{blockData}).Return(nil)
+		store.On("Write", mock.Anything).Return(nil)
 
-		syncer := &EthSyncer{store: store}
+		syncer := &EthSyncer{
+			EthConfig: EthConfig{BatchSize: 2},
+			store:     store,
+		}
 		syncer.processFinalized(&extract.EthRevertableBlockData{BlockData: &blockData})
+		store.AssertNotCalled(t, "Write", mock.Anything)
 
+		syncer.processFinalized(&extract.EthRevertableBlockData{BlockData: &blockData})
 		store.AssertCalled(t, "Write", mock.Anything)
 	})
 
