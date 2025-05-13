@@ -8,6 +8,7 @@ import (
 	"github.com/Conflux-Chain/confura-data-cache/extract"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/log"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -34,6 +35,7 @@ type EthSyncer struct {
 	store              EthStore
 	finalizedExtractor EthExtractor
 	writeBuffer        []types.EthBlockData
+	writeLogger        *log.ErrorTolerantLogger
 }
 
 func NewEthSyncer(conf EthConfig, store *leveldb.Store) (*EthSyncer, error) {
@@ -58,6 +60,7 @@ func newEthSyncer(conf EthConfig, store EthStore, extractorFactory EthExtractorF
 		store:              store,
 		finalizedExtractor: finalizedExtractor,
 		writeBuffer:        make([]types.EthBlockData, 0, conf.BatchSize),
+		writeLogger:        log.NewErrorTolerantLogger(log.DefaultETConfig),
 	}, nil
 }
 
@@ -92,15 +95,15 @@ func (s *EthSyncer) processFinalized(result *extract.EthRevertableBlockData) {
 
 	for {
 		err := s.flushWriteBuffer()
-		if err == nil {
+		s.writeLogger.Log(
+			logrus.StandardLogger(), err, "Eth finalized syncer failed to write batch buffer",
+		)
+
+		if err != nil {
+			time.Sleep(time.Second)
+		} else {
 			break
 		}
-
-		logrus.WithFields(logrus.Fields{
-			"blockNumber": result.BlockData.Block.Number.Uint64(),
-			"blockHash":   result.BlockData.Block.Hash,
-		}).WithError(err).Error("Eth finalized syncer failed to write batch buffer")
-		time.Sleep(time.Second)
 	}
 }
 

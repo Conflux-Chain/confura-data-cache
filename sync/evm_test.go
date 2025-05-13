@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"math/big"
@@ -13,11 +12,11 @@ import (
 
 	"github.com/Conflux-Chain/confura-data-cache/extract"
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/log"
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/mcuadros/go-defaults"
 	ethTypes "github.com/openweb3/web3go/types"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -148,8 +147,9 @@ func TestEthSyncerProcessFinalized(t *testing.T) {
 		store.On("Write", mock.Anything).Return(nil)
 
 		syncer := &EthSyncer{
-			EthConfig: EthConfig{BatchSize: 2},
-			store:     store,
+			EthConfig:   EthConfig{BatchSize: 2},
+			store:       store,
+			writeLogger: log.NewErrorTolerantLogger(log.DefaultETConfig),
 		}
 		syncer.processFinalized(&extract.EthRevertableBlockData{BlockData: &blockData})
 		store.AssertNotCalled(t, "Write", mock.Anything)
@@ -168,14 +168,13 @@ func TestEthSyncerProcessFinalized(t *testing.T) {
 		store.On("Write", mock.Anything).Return(errors.New("store error")).Once()
 		store.On("Write", mock.Anything).Return(nil).Once()
 
-		var buf bytes.Buffer
-		logrus.SetOutput(&buf)
-
-		syncer := &EthSyncer{store: store}
+		syncer := &EthSyncer{
+			store:       store,
+			writeLogger: log.NewErrorTolerantLogger(log.DefaultETConfig),
+		}
 		syncer.processFinalized(&extract.EthRevertableBlockData{BlockData: &blockData})
 
 		store.AssertCalled(t, "Write", mock.Anything)
-		assert.Contains(t, buf.String(), "store error")
 	})
 }
 
@@ -202,15 +201,13 @@ func TestEthSyncerRun(t *testing.T) {
 		ch.Send(types.NewSized(revertableBlockData))
 	}).Return()
 
-	var buf bytes.Buffer
-	logrus.SetOutput(&buf)
-
 	syncer := &EthSyncer{
 		EthConfig: EthConfig{
 			Extract: extract.EthConfig{MaxMemoryUsageBytes: 1024},
 		},
 		store:              store,
 		finalizedExtractor: extractor,
+		writeLogger:        log.NewErrorTolerantLogger(log.DefaultETConfig),
 	}
 
 	wg.Add(1)
@@ -219,5 +216,4 @@ func TestEthSyncerRun(t *testing.T) {
 	wg.Wait()
 	assert.Error(t, ctx.Err())
 	store.AssertCalled(t, "Write", mock.Anything)
-	assert.Contains(t, buf.String(), "store error")
 }
