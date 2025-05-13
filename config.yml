@@ -13,3 +13,16 @@
 #   cors: ["*"]
 #   virtualHosts: ["*"]
 #   jwtSecretHex: 
+
+# Synchronization configuration
+# sync:
+#   # Batch size to write into the leveldb
+#   batchSize: 10
+#   # Extractor configurations
+#   extract:
+#     rpcEndpoint:
+#     maxMemoryUsageBytes: 268435456
+#     pollInterval: 1s
+#     serialOption:
+#       routines:
+#       window:

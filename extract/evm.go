@@ -90,7 +90,7 @@ func NewEthExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthE
 
 func newEthExtractorWithClient(rpcClient EthRpcClient, conf EthConfig, provider ...FinalizedHeightProvider) (*EthExtractor, error) {
 	// Normalize start block number if necessary
-	if conf.StartBlockNumber <= 0 {
+	if conf.StartBlockNumber < 0 {
 		block, err := rpcClient.BlockHeaderByNumber(context.Background(), conf.StartBlockNumber)
 		if err != nil {
 			return nil, errors.WithMessage(err, "failed to normalize start block")
@@ -138,7 +138,9 @@ func (e *EthExtractor) Start(ctx context.Context, dataChan *EthMemoryBoundedChan
 
 		resultData, caughtUp, err := e.extractOnce(ctx)
 		if resultData != nil {
-			dataChan.Send(types.NewSized(resultData))
+			if dataChan.Send(types.NewSized(resultData)) != nil { // channel closed?
+				return
+			}
 		}
 
 		if err != nil || caughtUp {
