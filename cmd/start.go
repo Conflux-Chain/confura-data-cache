@@ -7,6 +7,7 @@ import (
 
 	"github.com/Conflux-Chain/confura-data-cache/rpc"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
+	dataSync "github.com/Conflux-Chain/confura-data-cache/sync"
 	"github.com/Conflux-Chain/go-conflux-util/cmd"
 	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/sirupsen/logrus"
@@ -31,7 +32,7 @@ func init() {
 }
 
 func start(*cobra.Command, []string) {
-	_, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
 	// create or open leveldb database
@@ -44,7 +45,10 @@ func start(*cobra.Command, []string) {
 	defer store.Close()
 	logrus.WithField("config", fmt.Sprintf("%+v", storeConfig)).Info("LevelDB database created or opened")
 
-	// TODO go sync.Run(ctx, store)
+	// run sync
+	wg.Add(1)
+	syncer := dataSync.MustNewEthSyncerFromViper(store)
+	go syncer.Run(ctx, &wg)
 
 	// serve RPC
 	var rpcConfig rpc.Config

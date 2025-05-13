@@ -382,6 +382,32 @@ func TestEthExtractorStart(t *testing.T) {
 		c.AssertCalled(t, "Close")
 	})
 
+	t.Run("MemoryBoundedChannelClosed", func(t *testing.T) {
+		c := new(MockEthRpcClient)
+		c.On("Close").Return(nil)
+		c.On("BlockHeaderByNumber", mock.Anything, ethTypes.FinalizedBlockNumber).
+			Return(makeMockBlock(100, "0x100", "0x99"), nil)
+		c.On("BlockHeaderByNumber", mock.Anything, ethTypes.LatestBlockNumber).
+			Return(makeMockBlock(101, "0x101", "0x100"), nil)
+		c.On("BlockBundleByNumber", mock.Anything, ethTypes.BlockNumber(101)).Return(types.EthBlockData{
+			Block: makeMockBlock(101, "0x101", "0x100"),
+		}, nil)
+
+		ex := newMockExtractor(EthConfig{
+			PollInterval:      time.Millisecond,
+			StartBlockNumber:  101,
+			TargetBlockNumber: ethTypes.LatestBlockNumber,
+		}, c, NewBlockHashCache(0))
+
+		dataChan := NewEthMemoryBoundedChannel(math.MaxInt)
+		dataChan.Close()
+
+		go ex.Start(context.Background(), dataChan)
+
+		time.Sleep(10 * time.Millisecond)
+		c.AssertCalled(t, "Close")
+	})
+
 	t.Run("SuccessfulExtraction", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
