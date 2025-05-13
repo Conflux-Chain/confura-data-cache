@@ -67,7 +67,7 @@ func TestEthSyncerIntegration(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
 	nextStoreWrite := uint64(100)

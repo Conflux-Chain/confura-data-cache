@@ -5,8 +5,9 @@ import (
 	"testing"
 
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
-	"github.com/Conflux-Chain/go-conflux-util/viper"
+	viperutil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/sirupsen/logrus"
+	viper "github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -14,7 +15,8 @@ func TestMustNewEthSyncerFromViper(t *testing.T) {
 	t.Parallel()
 
 	t.Run("Success", func(t *testing.T) {
-		viper.MustInit("CDC", "../config.yml")
+		viperutil.MustInit("CDC", "../config.yml")
+		defer viper.Reset()
 
 		os.Setenv("CDC_SYNC_BATCHSIZE", "1")
 		defer os.Setenv("CDC_SYNC_BATCHSIZE", "")
