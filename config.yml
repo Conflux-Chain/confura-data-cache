@@ -14,11 +14,6 @@
 #   virtualHosts: ["*"]
 #   jwtSecretHex: 
 
-# Nearhead cache configuration
-# cache:
-#   maxMemory: 104857600
-#   maxLogs: 10000
-
 # Synchronization configuration
 # sync:
 #   # Batch size to write into the leveldb

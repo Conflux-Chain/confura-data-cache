@@ -46,8 +46,9 @@ func start(*cobra.Command, []string) {
 	logrus.WithField("config", fmt.Sprintf("%+v", storeConfig)).Info("LevelDB database created or opened")
 
 	// run sync
-	wg.Add(1)
 	syncer := dataSync.MustNewEthSyncerFromViper(store)
+
+	wg.Add(1)
 	go syncer.Run(ctx, &wg)
 
 	// serve RPC
