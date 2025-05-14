@@ -56,6 +56,7 @@ func assertLazyByDefault[T any](t *testing.T) {
 
 	var s2 Lazy[T]
 
+	assert.True(t, s2.IsEmpty())
 	assert.Equal(t, s1, s2.MustLoad())
 
 	encoded2, err := json.Marshal(s2)

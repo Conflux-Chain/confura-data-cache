@@ -57,3 +57,8 @@ func (lazy *Lazy[T]) MustLoad() T {
 
 	return val
 }
+
+// IsEmpty indicates if this lazy object is empty.
+func (lazy *Lazy[T]) IsEmpty() bool {
+	return len(lazy.encoded) == 0
+}
