@@ -26,3 +26,7 @@
 #     serialOption:
 #       routines:
 #       window:
+#   # Health configurations
+#   health:
+#     threshold: 1m
+#     remind: 5m

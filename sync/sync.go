@@ -3,13 +3,15 @@ package sync
 import (
 	"github.com/Conflux-Chain/confura-data-cache/extract"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
+	"github.com/Conflux-Chain/go-conflux-util/health"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/sirupsen/logrus"
 )
 
 type EthConfig struct {
-	BatchSize int               `default:"10"` // Number of blocks to write in a single batch
-	Extract   extract.EthConfig // Configurations for the extractor
+	BatchSize int                       `default:"10"` // Number of blocks to write in a single batch
+	Extract   extract.EthConfig         // Configurations for the extractor
+	Health    health.TimedCounterConfig // health configurations
 }
 
 func MustNewEthSyncerFromViper(store *leveldb.Store) *EthSyncer {

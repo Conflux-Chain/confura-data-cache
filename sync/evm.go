@@ -8,7 +8,7 @@ import (
 	"github.com/Conflux-Chain/confura-data-cache/extract"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	"github.com/Conflux-Chain/confura-data-cache/types"
-	"github.com/Conflux-Chain/go-conflux-util/log"
+	"github.com/Conflux-Chain/go-conflux-util/health"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -35,7 +35,7 @@ type EthSyncer struct {
 	store              EthStore
 	finalizedExtractor EthExtractor
 	writeBuffer        []types.EthBlockData
-	writeLogger        *log.ErrorTolerantLogger
+	health             *health.TimedCounter
 }
 
 func NewEthSyncer(conf EthConfig, store *leveldb.Store) (*EthSyncer, error) {
@@ -60,7 +60,7 @@ func newEthSyncer(conf EthConfig, store EthStore, extractorFactory EthExtractorF
 		store:              store,
 		finalizedExtractor: finalizedExtractor,
 		writeBuffer:        make([]types.EthBlockData, 0, conf.BatchSize),
-		writeLogger:        log.NewErrorTolerantLogger(log.DefaultETConfig),
+		health:             health.NewTimedCounter(conf.Health),
 	}, nil
 }
 
@@ -95,9 +95,15 @@ func (s *EthSyncer) processFinalized(result *extract.EthRevertableBlockData) {
 
 	for {
 		err := s.flushWriteBuffer()
-		s.writeLogger.Log(
-			logrus.StandardLogger(), err, "Eth finalized syncer failed to write batch buffer",
-		)
+
+		recovered, unhealthy, unrecovered, elapsed := s.health.OnError(err)
+		if recovered {
+			logrus.WithField("elapsed", elapsed).Warn("Eth finalized syncer recovered")
+		} else if unhealthy {
+			logrus.WithError(err).WithField("elapsed", elapsed).Warn("Eth finalized syncer failed to write batch buffer")
+		} else if unrecovered {
+			logrus.WithError(err).WithField("elapsed", elapsed).Warn("Eth finalized syncer failed to write batch buffer for a long time")
+		}
 
 		if err != nil {
 			time.Sleep(time.Second)
