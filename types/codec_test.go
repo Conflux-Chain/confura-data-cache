@@ -49,30 +49,37 @@ func TestLazyByUnmarshal(t *testing.T) {
 	assertLazyByUnmarshal(t, []Student(nil))
 }
 
-func assertLazyByDefault[T any](t *testing.T) {
+func assertLazyByDefault[T any](t *testing.T, ptr bool) {
 	var s1 T
 	encoded1, err := json.Marshal(s1)
 	assert.Nil(t, err)
 
 	var s2 Lazy[T]
-
-	assert.True(t, s2.IsEmpty())
+	assert.True(t, s2.IsEmptyOrNull())
 	assert.Equal(t, s1, s2.MustLoad())
 
 	encoded2, err := json.Marshal(s2)
 	assert.Nil(t, err)
 	assert.Equal(t, encoded1, encoded2)
+
+	var s3 Lazy[T]
+	assert.Nil(t, json.Unmarshal(encoded1, &s3))
+	if ptr {
+		assert.True(t, s3.IsEmptyOrNull())
+	} else {
+		assert.False(t, s3.IsEmptyOrNull())
+	}
 }
 
 func TestLazyByDefault(t *testing.T) {
 	// struct
-	assertLazyByDefault[Student](t)
+	assertLazyByDefault[Student](t, false)
 
 	// pointer
-	assertLazyByDefault[*Student](t)
+	assertLazyByDefault[*Student](t, true)
 
 	// slice
-	assertLazyByDefault[[]Student](t)
+	assertLazyByDefault[[]Student](t, true)
 }
 
 func TestLazyFromStruct(t *testing.T) {
