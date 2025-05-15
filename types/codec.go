@@ -58,7 +58,10 @@ func (lazy *Lazy[T]) MustLoad() T {
 	return val
 }
 
-// IsEmpty indicates if this lazy object is empty.
-func (lazy *Lazy[T]) IsEmpty() bool {
-	return len(lazy.encoded) == 0
+// IsEmptyOrNull indicates if the encoded data is empty or null value for pointer, map or slice type.
+//
+// This is helpful to check if the wrapped object is nil without json unmarshal for CPU saving.
+func (lazy *Lazy[T]) IsEmptyOrNull() bool {
+	size := len(lazy.encoded)
+	return size == 0 || (size == 4 && string(lazy.encoded) == "null")
 }
