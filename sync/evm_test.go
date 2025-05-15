@@ -12,7 +12,7 @@ import (
 
 	"github.com/Conflux-Chain/confura-data-cache/extract"
 	"github.com/Conflux-Chain/confura-data-cache/types"
-	"github.com/Conflux-Chain/go-conflux-util/log"
+	"github.com/Conflux-Chain/go-conflux-util/health"
 	"github.com/Conflux-Chain/go-conflux-util/parallel"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/mcuadros/go-defaults"
@@ -147,9 +147,12 @@ func TestEthSyncerProcessFinalized(t *testing.T) {
 		store.On("Write", mock.Anything).Return(nil)
 
 		syncer := &EthSyncer{
-			EthConfig:   EthConfig{BatchSize: 2},
-			store:       store,
-			writeLogger: log.NewErrorTolerantLogger(log.DefaultETConfig),
+			EthConfig: EthConfig{BatchSize: 2},
+			store:     store,
+			health: health.NewTimedCounter(health.TimedCounterConfig{
+				Threshold: time.Minute,
+				Remind:    5 * time.Minute,
+			}),
 		}
 		syncer.processFinalized(&extract.EthRevertableBlockData{BlockData: &blockData})
 		store.AssertNotCalled(t, "Write", mock.Anything)
@@ -169,8 +172,11 @@ func TestEthSyncerProcessFinalized(t *testing.T) {
 		store.On("Write", mock.Anything).Return(nil).Once()
 
 		syncer := &EthSyncer{
-			store:       store,
-			writeLogger: log.NewErrorTolerantLogger(log.DefaultETConfig),
+			store: store,
+			health: health.NewTimedCounter(health.TimedCounterConfig{
+				Threshold: time.Minute,
+				Remind:    5 * time.Minute,
+			}),
 		}
 		syncer.processFinalized(&extract.EthRevertableBlockData{BlockData: &blockData})
 
@@ -207,7 +213,10 @@ func TestEthSyncerRun(t *testing.T) {
 		},
 		store:              store,
 		finalizedExtractor: extractor,
-		writeLogger:        log.NewErrorTolerantLogger(log.DefaultETConfig),
+		health: health.NewTimedCounter(health.TimedCounterConfig{
+			Threshold: time.Minute,
+			Remind:    5 * time.Minute,
+		}),
 	}
 
 	wg.Add(1)
