@@ -149,10 +149,7 @@ func TestEthSyncerProcessFinalized(t *testing.T) {
 		syncer := &EthSyncer{
 			EthConfig: EthConfig{BatchSize: 2},
 			store:     store,
-			health: health.NewTimedCounter(health.TimedCounterConfig{
-				Threshold: time.Minute,
-				Remind:    5 * time.Minute,
-			}),
+			health:    health.NewTimedCounter(),
 		}
 		syncer.processFinalized(&extract.EthRevertableBlockData{BlockData: &blockData})
 		store.AssertNotCalled(t, "Write", mock.Anything)
@@ -172,11 +169,8 @@ func TestEthSyncerProcessFinalized(t *testing.T) {
 		store.On("Write", mock.Anything).Return(nil).Once()
 
 		syncer := &EthSyncer{
-			store: store,
-			health: health.NewTimedCounter(health.TimedCounterConfig{
-				Threshold: time.Minute,
-				Remind:    5 * time.Minute,
-			}),
+			store:  store,
+			health: health.NewTimedCounter(),
 		}
 		syncer.processFinalized(&extract.EthRevertableBlockData{BlockData: &blockData})
 
@@ -213,10 +207,7 @@ func TestEthSyncerRun(t *testing.T) {
 		},
 		store:              store,
 		finalizedExtractor: extractor,
-		health: health.NewTimedCounter(health.TimedCounterConfig{
-			Threshold: time.Minute,
-			Remind:    5 * time.Minute,
-		}),
+		health:             health.NewTimedCounter(),
 	}
 
 	wg.Add(1)
