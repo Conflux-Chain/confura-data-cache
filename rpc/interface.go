@@ -31,3 +31,39 @@ type Interface interface {
 	// GetBlockTraces returns all block traces for the given block hash or number. If not found, returns nil.
 	GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error)
 }
+
+var NotFoundImpl Interface = notFoundImpl{}
+
+type notFoundImpl struct{}
+
+func (notFoundImpl) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[*ethTypes.Block], error) {
+	return types.Lazy[*ethTypes.Block]{}, nil
+}
+
+func (notFoundImpl) GetBlockTransactionCount(bhon types.BlockHashOrNumber) (int64, error) {
+	return -1, nil
+}
+
+func (notFoundImpl) GetTransactionByHash(txHash common.Hash) (*ethTypes.TransactionDetail, error) {
+	return nil, nil
+}
+
+func (notFoundImpl) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex uint32) (*ethTypes.TransactionDetail, error) {
+	return nil, nil
+}
+
+func (notFoundImpl) GetTransactionReceipt(txHash common.Hash) (*ethTypes.Receipt, error) {
+	return nil, nil
+}
+
+func (notFoundImpl) GetBlockReceipts(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.Receipt], error) {
+	return types.Lazy[[]ethTypes.Receipt]{}, nil
+}
+
+func (notFoundImpl) GetTransactionTraces(txHash common.Hash) ([]ethTypes.LocalizedTrace, error) {
+	return nil, nil
+}
+
+func (notFoundImpl) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
+	return types.Lazy[[]ethTypes.LocalizedTrace]{}, nil
+}
