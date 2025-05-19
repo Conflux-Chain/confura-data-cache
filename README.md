@@ -21,6 +21,6 @@ On the other hand, the cache implementation must guarentee the maximum memory us
 
 Once any block is finalized (which means never reorg anymore)，blockchain data could be synchronized from RPC node and persist in offchain LevelDB database. In this way, such data cache could serve most historical data requests.
 
-## Lazy
+## Lazy Decode
 
-To improve the JSON RPC codec performance, all blockchain data stored in LevelDB database are formatted in JSON. In addition, do not unmarshal JSON data to concrete object (e.g. block, transaction) when load from database. For more details, please refer to the [Lazy](./types/codec.go) decode mechanism.
+In case of high QPS, JSON RPC codec may cause high CPU usage. To improve the JSON RPC codec performance, all blockchain data stored in LevelDB database are formatted in JSON. In addition, do not unmarshal JSON data to concrete object (e.g. block, transaction) when load from database. Instead, returns the raw JSON data to client. For more details, please refer to the [Lazy](./types/codec.go) decode mechanism.
