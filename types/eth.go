@@ -82,7 +82,7 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData,
 	}
 
 	bnoh := types.BlockNumberOrHashWithNumber(bn)
-	receipts, err := client.Parity.BlockReceipts(&bnoh)
+	receipts, err := client.Eth.BlockReceipts(&bnoh)
 	if err != nil {
 		return EthBlockData{}, errors.WithMessage(err, "Failed to get block receipts")
 	}
@@ -103,9 +103,13 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData,
 	metrics.GetOrRegisterHistogram("types/eth/block/txs").Update(int64(len(receipts)))
 	metrics.GetOrRegisterHistogram("types/eth/block/traces").Update(int64(len(traces)))
 
+	var blockReceipts []types.Receipt
+	for i := range receipts {
+		blockReceipts = append(blockReceipts, *receipts[i])
+	}
 	data := EthBlockData{
 		Block:    block,
-		Receipts: receipts,
+		Receipts: blockReceipts,
 		Traces:   traces,
 	}
 
