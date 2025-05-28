@@ -28,7 +28,7 @@
 #       window:
 #     # Trace extraction
 #     trace:
-#       enabled: false
+#       disabled: false
 #   # Health configurations
 #   health:
 #     threshold: 1m

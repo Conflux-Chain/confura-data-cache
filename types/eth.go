@@ -71,7 +71,7 @@ func (d *EthBlockData) Verify() error {
 }
 
 type EthQueryOption struct {
-	WithTraces bool
+	SkipTraces bool
 }
 
 func QueryEthBlockData(client *web3go.Client, blockNumber uint64, options ...EthQueryOption) (EthBlockData, error) {
@@ -101,7 +101,7 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64, options ...Eth
 	}
 
 	var traces []types.LocalizedTrace
-	if opt.WithTraces {
+	if !opt.SkipTraces {
 		traces, err = client.Trace.Blocks(bnoh)
 		if err != nil {
 			return EthBlockData{}, errors.WithMessage(err, "Failed to get block traces")

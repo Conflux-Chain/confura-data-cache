@@ -17,10 +17,10 @@ import (
 
 var (
 	validateLeveldbCmdArgs struct {
-		url         string
-		blockFrom   int64
-		numBlocks   uint64
-		enableTrace bool
+		url        string
+		blockFrom  int64
+		numBlocks  uint64
+		skipTraces bool
 	}
 
 	validateLeveldbCmd = &cobra.Command{
@@ -34,7 +34,7 @@ func init() {
 	validateLeveldbCmd.Flags().StringVar(&validateLeveldbCmdArgs.url, "url", "http://evm.confluxrpc.com", "Fullnode RPC endpoint")
 	validateLeveldbCmd.Flags().Int64Var(&validateLeveldbCmdArgs.blockFrom, "block-from", -100, "Block number to validate from, negative value means \"finalized\" - N")
 	validateLeveldbCmd.Flags().Uint64Var(&validateLeveldbCmdArgs.numBlocks, "blocks", 10, "Number of blocks to validate")
-	validateLeveldbCmd.Flags().BoolVar(&validateLeveldbCmdArgs.enableTrace, "enable-trace", false, "Enable trace validation")
+	validateLeveldbCmd.Flags().BoolVar(&validateLeveldbCmdArgs.skipTraces, "skip-traces", false, "Skip trace validation")
 
 	rootCmd.AddCommand(validateLeveldbCmd)
 }
@@ -66,7 +66,7 @@ func validateLeveldb(*cobra.Command, []string) {
 		numReceipts int
 		numTraces   int
 		queryOpt    = types.EthQueryOption{
-			WithTraces: validateLeveldbCmdArgs.enableTrace,
+			SkipTraces: validateLeveldbCmdArgs.skipTraces,
 		}
 	)
 

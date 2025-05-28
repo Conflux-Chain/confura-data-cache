@@ -32,8 +32,8 @@ type EthRpcClient interface {
 
 // Web3ClientAdapter implements `EthRpcClient` by adapting a web3go client.
 type Web3ClientAdapter struct {
-	enableTrace bool
-	client      *web3go.Client
+	skipTraces bool
+	client     *web3go.Client
 }
 
 // Close releases any held resources, such as network connections.
@@ -50,7 +50,7 @@ func (p *Web3ClientAdapter) BlockHeaderByNumber(ctx context.Context, bn ethTypes
 // BlockBundleByNumber retrieves a full block bundle including associated data.
 func (p *Web3ClientAdapter) BlockBundleByNumber(ctx context.Context, bn ethTypes.BlockNumber) (types.EthBlockData, error) {
 	startAt := time.Now()
-	queryOpt := types.EthQueryOption{WithTraces: p.enableTrace}
+	queryOpt := types.EthQueryOption{SkipTraces: p.skipTraces}
 	data, err := types.QueryEthBlockData(p.client.WithContext(ctx), uint64(bn), queryOpt)
 
 	ethMetrics.Latency(err == nil).Update(time.Since(startAt).Nanoseconds())
@@ -87,7 +87,7 @@ func NewEthExtractor(conf EthConfig, provider ...FinalizedHeightProvider) (*EthE
 	}
 
 	rpcClient := &Web3ClientAdapter{
-		client: client, enableTrace: conf.Trace.Enabled,
+		client: client, skipTraces: conf.Trace.Disabled,
 	}
 	return newEthExtractorWithClient(rpcClient, conf, provider...)
 }
