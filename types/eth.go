@@ -13,7 +13,7 @@ import (
 // EthBlockData contains all required data in a block.
 type EthBlockData struct {
 	Block    *types.Block
-	Receipts []types.Receipt
+	Receipts []*types.Receipt
 	Traces   []types.LocalizedTrace
 }
 
@@ -70,7 +70,16 @@ func (d *EthBlockData) Verify() error {
 	return nil
 }
 
-func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData, error) {
+type EthQueryOption struct {
+	WithTraces bool
+}
+
+func QueryEthBlockData(client *web3go.Client, blockNumber uint64, options ...EthQueryOption) (EthBlockData, error) {
+	var opt EthQueryOption
+	if len(options) > 0 {
+		opt = options[0]
+	}
+
 	bn := types.NewBlockNumber(int64(blockNumber))
 	block, err := client.Eth.BlockByNumber(bn, true)
 	if err != nil {
@@ -91,28 +100,26 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData,
 		return EthBlockData{}, errors.Errorf("Cannot find receipts by block number %v", blockNumber)
 	}
 
-	traces, err := client.Trace.Blocks(bnoh)
-	if err != nil {
-		return EthBlockData{}, errors.WithMessage(err, "Failed to get block traces")
+	var traces []types.LocalizedTrace
+	if opt.WithTraces {
+		traces, err = client.Trace.Blocks(bnoh)
+		if err != nil {
+			return EthBlockData{}, errors.WithMessage(err, "Failed to get block traces")
+		}
+
+		if traces == nil {
+			return EthBlockData{}, errors.Errorf("Cannot find traces by block number %v", blockNumber)
+		}
 	}
 
-	if traces == nil {
-		return EthBlockData{}, errors.Errorf("Cannot find traces by block number %v", blockNumber)
+	data := EthBlockData{
+		Block:    block,
+		Receipts: receipts,
+		Traces:   traces,
 	}
 
 	metrics.GetOrRegisterHistogram("types/eth/block/txs").Update(int64(len(receipts)))
 	metrics.GetOrRegisterHistogram("types/eth/block/traces").Update(int64(len(traces)))
-
-	var blockReceipts []types.Receipt
-	for i := range receipts {
-		blockReceipts = append(blockReceipts, *receipts[i])
-	}
-	data := EthBlockData{
-		Block:    block,
-		Receipts: blockReceipts,
-		Traces:   traces,
-	}
-
 	metrics.GetOrRegisterHistogram("types/eth/block/size").Update(int64(NewSized(data).Size))
 
 	return data, nil
