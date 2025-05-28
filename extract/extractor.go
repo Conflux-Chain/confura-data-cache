@@ -41,6 +41,11 @@ type Config[T any] struct {
 
 	// PollInterval specifies how often to poll for new blocks during normal, steady-state operation.
 	PollInterval time.Duration `default:"1s"`
+
+	// Trace configures trace extraction.
+	Trace struct {
+		Disabled bool // disable trace extraction
+	}
 }
 
 // EthConfig is a Config specialization for Ethereum-compatible blockchains.

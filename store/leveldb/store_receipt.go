@@ -10,7 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func (store *Store) writeReceipts(batch *leveldb.Batch, blockNumber uint64, receipts []ethTypes.Receipt) {
+func (store *Store) writeReceipts(batch *leveldb.Batch, blockNumber uint64, receipts []*ethTypes.Receipt) {
 	if receipts == nil {
 		return
 	}

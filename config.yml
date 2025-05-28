@@ -14,7 +14,7 @@
 #   virtualHosts: ["*"]
 #   jwtSecretHex: 
 
-# Synchronization configuration
+# Synchronization configurations
 # sync:
 #   # Batch size to write into the leveldb
 #   batchSize: 10
@@ -26,6 +26,9 @@
 #     serialOption:
 #       routines:
 #       window:
+#     # Trace extraction
+#     trace:
+#       disabled: false
 #   # Health configurations
 #   health:
 #     threshold: 1m

@@ -34,7 +34,7 @@ func createTestStore(t *testing.T, defaultNextBlockNumber ...uint64) (*Store, fu
 func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...common.Hash) types.EthBlockData {
 	// fullnode return empty array instead of nil for following data
 	txs := make([]ethTypes.TransactionDetail, 0, len(txHashes))
-	receipts := make([]ethTypes.Receipt, 0, len(txHashes))
+	receipts := make([]*ethTypes.Receipt, 0, len(txHashes))
 	traces := make([]ethTypes.LocalizedTrace, 0)
 
 	for i, v := range txHashes {
@@ -51,7 +51,7 @@ func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...com
 			Value:       big.NewInt(4),
 		})
 
-		receipts = append(receipts, ethTypes.Receipt{
+		receipts = append(receipts, &ethTypes.Receipt{
 			BlockHash:        blockHash,
 			BlockNumber:      uint64(blockNumber),
 			TransactionHash:  v,

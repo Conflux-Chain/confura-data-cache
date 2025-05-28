@@ -17,9 +17,10 @@ import (
 
 var (
 	validateLeveldbCmdArgs struct {
-		url       string
-		blockFrom int64
-		numBlocks uint64
+		url        string
+		blockFrom  int64
+		numBlocks  uint64
+		skipTraces bool
 	}
 
 	validateLeveldbCmd = &cobra.Command{
@@ -33,6 +34,7 @@ func init() {
 	validateLeveldbCmd.Flags().StringVar(&validateLeveldbCmdArgs.url, "url", "http://evm.confluxrpc.com", "Fullnode RPC endpoint")
 	validateLeveldbCmd.Flags().Int64Var(&validateLeveldbCmdArgs.blockFrom, "block-from", -100, "Block number to validate from, negative value means \"finalized\" - N")
 	validateLeveldbCmd.Flags().Uint64Var(&validateLeveldbCmdArgs.numBlocks, "blocks", 10, "Number of blocks to validate")
+	validateLeveldbCmd.Flags().BoolVar(&validateLeveldbCmdArgs.skipTraces, "skip-traces", false, "Skip trace validation")
 
 	rootCmd.AddCommand(validateLeveldbCmd)
 }
@@ -63,12 +65,15 @@ func validateLeveldb(*cobra.Command, []string) {
 		numTxs      int
 		numReceipts int
 		numTraces   int
+		queryOpt    = types.EthQueryOption{
+			SkipTraces: validateLeveldbCmdArgs.skipTraces,
+		}
 	)
 
 	// read data from full node and write into store
 	logrus.Info("Begin to retrieve eth block data from fullnode ...")
 	for i := blockFrom; i <= blockTo; i++ {
-		data, err := types.QueryEthBlockData(client, i)
+		data, err := types.QueryEthBlockData(client, i, queryOpt)
 		cmd.FatalIfErr(err, "Failed to query eth block data")
 
 		err = store.Write(data)

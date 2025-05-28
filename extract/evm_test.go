@@ -252,7 +252,7 @@ func TestEthExtractorExtractOnce(t *testing.T) {
 				c.On("BlockHeaderByNumber", ctx, ethTypes.LatestBlockNumber).Return(block, nil)
 				blockData := types.EthBlockData{
 					Block:    makeMockBlock(99, "0x99", "0x98"),
-					Receipts: []ethTypes.Receipt{{TransactionHash: common.HexToHash("0xaaab")}},
+					Receipts: []*ethTypes.Receipt{{TransactionHash: common.HexToHash("0xaaab")}},
 				}
 				blockData.Block.Transactions = *ethTypes.NewTxOrHashListByHashes([]common.Hash{common.HexToHash("0xaaaa")})
 				c.On("BlockBundleByNumber", ctx, ethTypes.BlockNumber(99)).Return(blockData, nil)
