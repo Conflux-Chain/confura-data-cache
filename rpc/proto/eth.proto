@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package rpc;
+
+option go_package = ".;rpc";
+
+service Eth {
+  rpc GetBlock (GetBlockRequest) returns (DataResponse);
+  rpc GetBlockTransactionCount (BlockId) returns (GetBlockTransactionCountResponse);
+
+  rpc GetTransactionByHash (TransactionId) returns (DataResponse);
+  rpc GetTransactionByIndex (GetTransactionByIndexRequest) returns (DataResponse);
+
+  rpc GetTransactionReceipt (TransactionId) returns (DataResponse);
+  rpc GetBlockReceipts (BlockId) returns (DataResponse);
+
+  rpc GetTransactionTraces (TransactionId) returns (DataResponse);
+  rpc GetBlockTraces (BlockId) returns (DataResponse);
+}
+
+message BlockId {
+  bytes hash = 1;
+  uint64 number = 2;
+}
+
+message GetBlockRequest {
+  BlockId block_id = 1;
+  bool is_full = 2;
+}
+
+message DataResponse {
+  bytes data = 1;
+}
+
+message GetBlockTransactionCountResponse {
+  int64 count = 1;
+}
+
+message TransactionId {
+  bytes hash = 1;
+}
+
+message GetTransactionByIndexRequest {
+  BlockId block_id = 1;
+  uint32 tx_index = 2;
+}
