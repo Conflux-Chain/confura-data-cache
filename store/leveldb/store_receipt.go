@@ -38,10 +38,6 @@ func (store *Store) GetTransactionReceipt(txHash common.Hash) (*ethTypes.Receipt
 		return nil, errors.WithMessage(err, "Failed to unmarshal receipts")
 	}
 
-	if receipts == nil {
-		return nil, nil
-	}
-
 	if int(txIndex) >= len(receipts) {
 		return nil, errors.Errorf("Data corrupted, invalid transaction index %v of length %v", txIndex, len(receipts))
 	}
