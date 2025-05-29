@@ -33,13 +33,13 @@ func (store *Store) GetTransactionTraces(txHash common.Hash) ([]ethTypes.Localiz
 		return nil, errors.WithMessagef(err, "Failed to get block traces by number %v", blockNumber)
 	}
 
-	if blockTracesLazy.IsEmptyOrNull() {
-		return nil, nil // No traces found for this transaction
-	}
-
 	blockTraces, err := blockTracesLazy.Load()
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to unmarshal block traces")
+	}
+
+	if blockTraces == nil {
+		return nil, nil
 	}
 
 	txTraces := make([]ethTypes.LocalizedTrace, 0)

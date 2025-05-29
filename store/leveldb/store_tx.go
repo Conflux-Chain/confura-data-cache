@@ -56,13 +56,13 @@ func (store *Store) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex 
 		return nil, errors.WithMessage(err, "Failed to get block by hash or number")
 	}
 
-	if blockLazy.IsEmptyOrNull() {
-		return nil, nil // No block found for this hash or number
-	}
-
 	block, err := blockLazy.Load()
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to unmarshal block")
+	}
+
+	if block == nil {
+		return nil, nil
 	}
 
 	txs := block.Transactions.Transactions()
