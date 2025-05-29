@@ -34,6 +34,7 @@ type EthSyncer struct {
 	EthConfig
 	store              EthStore
 	finalizedExtractor EthExtractor
+	lastFlushAt        time.Time
 	writeBuffer        []types.EthBlockData
 	health             *health.TimedCounter
 }
@@ -59,7 +60,8 @@ func newEthSyncer(conf EthConfig, store EthStore, extractorFactory EthExtractorF
 		EthConfig:          conf,
 		store:              store,
 		finalizedExtractor: finalizedExtractor,
-		writeBuffer:        make([]types.EthBlockData, 0, conf.BatchSize),
+		lastFlushAt:        time.Now(),
+		writeBuffer:        make([]types.EthBlockData, 0, conf.Persistence.BatchSize),
 		health:             health.NewTimedCounter(conf.Health),
 	}, nil
 }
@@ -89,7 +91,8 @@ func (s *EthSyncer) processFinalized(result *extract.EthRevertableBlockData) {
 	// Finalized block data will never be reorg-ed
 
 	s.writeBuffer = append(s.writeBuffer, *result.BlockData)
-	if s.BatchSize > 0 && len(s.writeBuffer) < s.BatchSize {
+	if len(s.writeBuffer) < s.Persistence.BatchSize && time.Since(s.lastFlushAt) < s.Persistence.BatchInterval {
+		// If the buffer is not full and the interval is not reached, just return
 		return
 	}
 
@@ -114,6 +117,8 @@ func (s *EthSyncer) processFinalized(result *extract.EthRevertableBlockData) {
 }
 
 func (s *EthSyncer) flushWriteBuffer() error {
+	s.lastFlushAt = time.Now()
+
 	if len(s.writeBuffer) == 0 {
 		return nil
 	}
