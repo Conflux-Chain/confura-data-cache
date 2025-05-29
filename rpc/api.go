@@ -26,7 +26,7 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
-	if blockLazy.IsEmptyOrNull() || isFull {
+	if isFull {
 		return blockLazy, nil
 	}
 
@@ -40,6 +40,10 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 	if txs == nil {
 		block.Transactions = *ethTypes.NewTxOrHashListByHashes(nil)
 		return types.NewLazy(block)
+	}
+
+	if block == nil {
+		return types.Lazy[*ethTypes.Block]{}, nil
 	}
 
 	hashes := make([]common.Hash, 0, len(txs))
