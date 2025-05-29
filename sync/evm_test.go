@@ -147,7 +147,7 @@ func TestEthSyncerProcessFinalized(t *testing.T) {
 		store.On("Write", mock.Anything).Return(nil)
 
 		syncer := &EthSyncer{
-			EthConfig: EthConfig{BatchSize: 2},
+			EthConfig: EthConfig{Persistence: PersistenceConfig{BatchSize: 2}},
 			store:     store,
 			health:    health.NewTimedCounter(),
 		}

@@ -25,7 +25,7 @@ func TestMustNewEthSyncerFromViper(t *testing.T) {
 
 		syncer := MustNewEthSyncerFromViper(&leveldb.Store{})
 		assert.NotNil(t, syncer)
-		assert.Equal(t, 1, syncer.BatchSize)
+		assert.Equal(t, 1, syncer.Persistence.BatchSize)
 	})
 
 	t.Run("Error", func(t *testing.T) {
