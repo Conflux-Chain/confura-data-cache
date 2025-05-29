@@ -17,16 +17,13 @@ import (
 
 var startCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start data cache service to sync data from fullnode and provides RPC service",
+	Short: "Start data cache service to sync data from fullnode and provides RPC and gRPC service",
 	Run:   start,
 }
 
 func init() {
 	startCmd.Flags().String("store-path", leveldb.DefaultConfig().Path, "LevelDB database path")
 	viper.BindPFlag("store.leveldb.path", startCmd.Flag("store-path"))
-
-	startCmd.Flags().String("endpoint", rpc.DefaultConfig().Endpoint, "RPC endpoint to serve cached data query")
-	viper.BindPFlag("rpc.endpoint", startCmd.Flag("endpoint"))
 
 	rootCmd.AddCommand(startCmd)
 }
@@ -54,8 +51,8 @@ func start(*cobra.Command, []string) {
 	// serve RPC
 	var rpcConfig rpc.Config
 	viperUtil.MustUnmarshalKey("rpc", &rpcConfig)
-	go rpc.MustServe(rpcConfig, store)
-	logrus.WithField("config", fmt.Sprintf("%+v", rpcConfig)).Info("RPC started")
+	rpc.MustStartRPC(ctx, &wg, rpcConfig, store)
+	rpc.MustStartGRPC(ctx, &wg, rpcConfig, store)
 
 	// wait for terminate signal to shutdown gracefully
 	cmd.GracefulShutdown(&wg, cancel)

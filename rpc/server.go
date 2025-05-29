@@ -1,14 +1,19 @@
 package rpc
 
 import (
+	"context"
 	"encoding/hex"
+	"net"
 	"net/http"
+	"sync"
 
+	pb "github.com/Conflux-Chain/confura-data-cache/rpc/proto"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/mcuadros/go-defaults"
 	"github.com/openweb3/go-rpc-provider"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 type Config struct {
@@ -16,6 +21,10 @@ type Config struct {
 	Cors         []string `default:"[*]"`
 	VirtualHosts []string `default:"[*]"`
 	JwtSecretHex string   // without 0x prefix
+
+	Proto struct {
+		Endpoint string `default:":48545"`
+	}
 }
 
 func DefaultConfig() (config Config) {
@@ -23,8 +32,15 @@ func DefaultConfig() (config Config) {
 	return
 }
 
-// MustServe starts RPC service until shutdown.
-func MustServe(config Config, store *leveldb.Store) error {
+// MustStartRPC starts RPC service.
+func MustStartRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store *leveldb.Store) {
+	wg.Add(1)
+
+	listener, err := net.Listen("tcp", config.Endpoint)
+	if err != nil {
+		logrus.WithError(err).WithField("endpoint", config.Endpoint).Fatal("Failed to listen for RPC service")
+	}
+
 	handler := rpc.NewServer()
 
 	if err := handler.RegisterName("eth", NewApi(store)); err != nil {
@@ -41,5 +57,35 @@ func MustServe(config Config, store *leveldb.Store) error {
 		Handler: node.NewHTTPHandlerStack(handler, config.Cors, config.VirtualHosts, jwtSecret),
 	}
 
-	return server.ListenAndServe()
+	go server.Serve(listener)
+
+	logrus.WithField("endpoint", config.Endpoint).Info("Succeeded to run RPC service")
+
+	go func() {
+		defer wg.Done()
+		<-ctx.Done()
+		server.Close()
+	}()
+}
+
+// MustStartGRPC starts gRPC service.
+func MustStartGRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store *leveldb.Store) {
+	wg.Add(1)
+
+	listener, err := net.Listen("tcp", config.Proto.Endpoint)
+	if err != nil {
+		logrus.WithError(err).WithField("endpoint", config.Proto.Endpoint).Fatal("Failed to listen for gRPC service")
+	}
+
+	server := grpc.NewServer()
+	pb.RegisterEthServer(server, NewApiProto(NewApi(store)))
+	go server.Serve(listener)
+
+	logrus.WithField("endpoint", config.Proto.Endpoint).Info("Succeeded to run gRPC service")
+
+	go func() {
+		defer wg.Done()
+		<-ctx.Done()
+		server.GracefulStop()
+	}()
 }
