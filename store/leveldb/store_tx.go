@@ -61,6 +61,10 @@ func (store *Store) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex 
 		return nil, errors.WithMessage(err, "Failed to unmarshal block")
 	}
 
+	if block == nil {
+		return nil, nil
+	}
+
 	txs := block.Transactions.Transactions()
 
 	if int(txIndex) >= len(txs) {

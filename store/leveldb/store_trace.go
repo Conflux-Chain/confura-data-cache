@@ -38,7 +38,11 @@ func (store *Store) GetTransactionTraces(txHash common.Hash) ([]ethTypes.Localiz
 		return nil, errors.WithMessage(err, "Failed to unmarshal block traces")
 	}
 
-	var txTraces []ethTypes.LocalizedTrace
+	if blockTraces == nil {
+		return nil, nil
+	}
+
+	txTraces := make([]ethTypes.LocalizedTrace, 0)
 	for _, trace := range blockTraces {
 		if trace.TransactionPosition != nil && *trace.TransactionPosition == uint(txIndex) {
 			txTraces = append(txTraces, trace)
