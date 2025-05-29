@@ -147,9 +147,14 @@ func TestEthSyncerProcessFinalized(t *testing.T) {
 		store.On("Write", mock.Anything).Return(nil)
 
 		syncer := &EthSyncer{
-			EthConfig: EthConfig{BatchSize: 2},
-			store:     store,
-			health:    health.NewTimedCounter(),
+			EthConfig: EthConfig{
+				Persistence: PersistenceConfig{
+					BatchSize: 2, BatchInterval: time.Second,
+				},
+			},
+			store:       store,
+			health:      health.NewTimedCounter(),
+			lastFlushAt: time.Now(),
 		}
 		syncer.processFinalized(&extract.EthRevertableBlockData{BlockData: &blockData})
 		store.AssertNotCalled(t, "Write", mock.Anything)

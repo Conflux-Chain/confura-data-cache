@@ -16,8 +16,12 @@
 
 # Synchronization configurations
 # sync:
-#   # Batch size to write into the leveldb
-#   batchSize: 10
+#   # Persistence configurations
+#   persistence:
+#     # Batch write size
+#     batchSize: 10
+#     # Batch write interval
+#     batchInterval: 5s
 #   # Extractor configurations
 #   extract:
 #     rpcEndpoint:
