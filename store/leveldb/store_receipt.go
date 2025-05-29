@@ -33,6 +33,10 @@ func (store *Store) GetTransactionReceipt(txHash common.Hash) (*ethTypes.Receipt
 		return nil, errors.WithMessagef(err, "Failed to get block receipts by number %v", blockNumber)
 	}
 
+	if receiptsLazy.IsEmptyOrNull() {
+		return nil, nil // No receipts found for this transaction
+	}
+
 	receipts, err := receiptsLazy.Load()
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to unmarshal receipts")

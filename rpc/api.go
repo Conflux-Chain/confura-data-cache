@@ -26,7 +26,7 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
-	if isFull {
+	if blockLazy.IsEmptyOrNull() || isFull {
 		return blockLazy, nil
 	}
 
@@ -34,10 +34,6 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 	block, err := blockLazy.Load()
 	if err != nil {
 		return types.Lazy[*ethTypes.Block]{}, errors.WithMessage(err, "Failed to unmarshal block")
-	}
-
-	if block == nil {
-		return types.Lazy[*ethTypes.Block]{}, nil
 	}
 
 	txs := block.Transactions.Transactions()
