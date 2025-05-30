@@ -13,6 +13,8 @@
 #   cors: ["*"]
 #   virtualHosts: ["*"]
 #   jwtSecretHex: 
+#   proto:
+#     endpoint: :48545
 
 # Synchronization configurations
 # sync:
