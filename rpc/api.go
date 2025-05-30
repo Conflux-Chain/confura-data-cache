@@ -19,7 +19,6 @@ func NewApi(store *leveldb.Store) *Api {
 	return &Api{store}
 }
 
-// GetBlock implements the `Interface` interface.
 func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[*ethTypes.Block], error) {
 	blockLazy, err := api.Store.GetBlock(bhon)
 	if err != nil {
@@ -54,4 +53,40 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 	block.Transactions = *ethTypes.NewTxOrHashListByHashes(hashes)
 
 	return types.NewLazy(block)
+}
+
+func (api *Api) GetTransactionByHash(txHash common.Hash) (types.Lazy[*ethTypes.TransactionDetail], error) {
+	tx, err := api.Store.GetTransactionByHash(txHash)
+	if err != nil {
+		return types.Lazy[*ethTypes.TransactionDetail]{}, err
+	}
+
+	return types.NewLazy(tx)
+}
+
+func (api *Api) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex uint32) (types.Lazy[*ethTypes.TransactionDetail], error) {
+	tx, err := api.Store.GetTransactionByIndex(bhon, txIndex)
+	if err != nil {
+		return types.Lazy[*ethTypes.TransactionDetail]{}, err
+	}
+
+	return types.NewLazy(tx)
+}
+
+func (api *Api) GetTransactionReceipt(txHash common.Hash) (types.Lazy[*ethTypes.Receipt], error) {
+	receipt, err := api.Store.GetTransactionReceipt(txHash)
+	if err != nil {
+		return types.Lazy[*ethTypes.Receipt]{}, err
+	}
+
+	return types.NewLazy(receipt)
+}
+
+func (api *Api) GetTransactionTraces(txHash common.Hash) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
+	traces, err := api.Store.GetTransactionTraces(txHash)
+	if err != nil {
+		return types.Lazy[[]ethTypes.LocalizedTrace]{}, nil
+	}
+
+	return types.NewLazy(traces)
 }

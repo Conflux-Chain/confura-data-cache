@@ -11,6 +11,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+var _ Interface = (*ClientProto)(nil)
+
 type ClientProto struct {
 	inner pb.EthClient
 
