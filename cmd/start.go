@@ -51,8 +51,9 @@ func start(*cobra.Command, []string) {
 	// serve RPC
 	var rpcConfig rpc.Config
 	viperUtil.MustUnmarshalKey("rpc", &rpcConfig)
-	rpc.MustStartRPC(ctx, &wg, rpcConfig, store)
-	rpc.MustStartGRPC(ctx, &wg, rpcConfig, store)
+	wg.Add(2)
+	go rpc.MustServeRPC(ctx, &wg, rpcConfig, store)
+	go rpc.MustServeGRPC(ctx, &wg, rpcConfig, store)
 
 	// wait for terminate signal to shutdown gracefully
 	cmd.GracefulShutdown(&wg, cancel)

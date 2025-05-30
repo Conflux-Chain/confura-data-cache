@@ -32,9 +32,9 @@ func DefaultConfig() (config Config) {
 	return
 }
 
-// MustStartRPC starts RPC service.
-func MustStartRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store *leveldb.Store) {
-	wg.Add(1)
+// MustServeRPC starts RPC service and wait for graceful shutdown.
+func MustServeRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store *leveldb.Store) {
+	defer wg.Done()
 
 	listener, err := net.Listen("tcp", config.Endpoint)
 	if err != nil {
@@ -59,18 +59,16 @@ func MustStartRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store 
 
 	go server.Serve(listener)
 
-	logrus.WithField("endpoint", config.Endpoint).Info("Succeeded to run RPC service")
+	logrus.WithField("endpoint", config.Endpoint).Info("Succeeded to start RPC service")
 
-	go func() {
-		defer wg.Done()
-		<-ctx.Done()
-		server.Close()
-	}()
+	<-ctx.Done()
+
+	server.Close()
 }
 
-// MustStartGRPC starts gRPC service.
-func MustStartGRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store *leveldb.Store) {
-	wg.Add(1)
+// MustServeGRPC starts gRPC service and wait for graceful shutdown.
+func MustServeGRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store *leveldb.Store) {
+	defer wg.Done()
 
 	listener, err := net.Listen("tcp", config.Proto.Endpoint)
 	if err != nil {
@@ -83,9 +81,7 @@ func MustStartGRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store
 
 	logrus.WithField("endpoint", config.Proto.Endpoint).Info("Succeeded to run gRPC service")
 
-	go func() {
-		defer wg.Done()
-		<-ctx.Done()
-		server.GracefulStop()
-	}()
+	<-ctx.Done()
+
+	server.GracefulStop()
 }
