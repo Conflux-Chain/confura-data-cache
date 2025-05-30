@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 var _ Interface = (*ClientProto)(nil)
@@ -22,7 +23,7 @@ type ClientProto struct {
 }
 
 func NewClientProto(url string, timeout ...time.Duration) (*ClientProto, error) {
-	conn, err := grpc.Dial(url)
+	conn, err := grpc.Dial(url, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, err
 	}
