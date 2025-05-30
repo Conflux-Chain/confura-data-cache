@@ -7,6 +7,8 @@ import (
 	ethTypes "github.com/openweb3/web3go/types"
 )
 
+var _ Interface = (*Client)(nil)
+
 // Client is the RPC client to interact with RPC server.
 type Client struct {
 	*providers.MiddlewarableProvider
@@ -42,24 +44,24 @@ func (c *Client) GetBlockTransactionCount(bhon types.BlockHashOrNumber) (int64, 
 	return providers.Call[int64](c, "eth_getBlockTransactionCount", bhon)
 }
 
-func (c *Client) GetTransactionByHash(txHash common.Hash) (*ethTypes.TransactionDetail, error) {
-	return providers.Call[*ethTypes.TransactionDetail](c, "eth_getTransactionByHash", txHash)
+func (c *Client) GetTransactionByHash(txHash common.Hash) (types.Lazy[*ethTypes.TransactionDetail], error) {
+	return providers.Call[types.Lazy[*ethTypes.TransactionDetail]](c, "eth_getTransactionByHash", txHash)
 }
 
-func (c *Client) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex uint32) (*ethTypes.TransactionDetail, error) {
-	return providers.Call[*ethTypes.TransactionDetail](c, "eth_getTransactionByIndex", bhon, txIndex)
+func (c *Client) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex uint32) (types.Lazy[*ethTypes.TransactionDetail], error) {
+	return providers.Call[types.Lazy[*ethTypes.TransactionDetail]](c, "eth_getTransactionByIndex", bhon, txIndex)
 }
 
-func (c *Client) GetTransactionReceipt(txHash common.Hash) (*ethTypes.Receipt, error) {
-	return providers.Call[*ethTypes.Receipt](c, "eth_getTransactionReceipt", txHash)
+func (c *Client) GetTransactionReceipt(txHash common.Hash) (types.Lazy[*ethTypes.Receipt], error) {
+	return providers.Call[types.Lazy[*ethTypes.Receipt]](c, "eth_getTransactionReceipt", txHash)
 }
 
 func (c *Client) GetBlockReceipts(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.Receipt], error) {
 	return providers.Call[types.Lazy[[]ethTypes.Receipt]](c, "eth_getBlockReceipts", bhon)
 }
 
-func (c *Client) GetTransactionTraces(txHash common.Hash) ([]ethTypes.LocalizedTrace, error) {
-	return providers.Call[[]ethTypes.LocalizedTrace](c, "eth_getTransactionTraces", txHash)
+func (c *Client) GetTransactionTraces(txHash common.Hash) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
+	return providers.Call[types.Lazy[[]ethTypes.LocalizedTrace]](c, "eth_getTransactionTraces", txHash)
 }
 
 func (c *Client) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
