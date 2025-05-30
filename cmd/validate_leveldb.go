@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
+	"time"
 
+	"github.com/Conflux-Chain/confura-data-cache/rpc"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/cmd"
@@ -17,10 +21,9 @@ import (
 
 var (
 	validateLeveldbCmdArgs struct {
-		url        string
-		blockFrom  int64
-		numBlocks  uint64
-		skipTraces bool
+		url       string
+		blockFrom int64
+		numBlocks uint64
 	}
 
 	validateLeveldbCmd = &cobra.Command{
@@ -34,7 +37,6 @@ func init() {
 	validateLeveldbCmd.Flags().StringVar(&validateLeveldbCmdArgs.url, "url", "http://evm.confluxrpc.com", "Fullnode RPC endpoint")
 	validateLeveldbCmd.Flags().Int64Var(&validateLeveldbCmdArgs.blockFrom, "block-from", -100, "Block number to validate from, negative value means \"finalized\" - N")
 	validateLeveldbCmd.Flags().Uint64Var(&validateLeveldbCmdArgs.numBlocks, "blocks", 10, "Number of blocks to validate")
-	validateLeveldbCmd.Flags().BoolVar(&validateLeveldbCmdArgs.skipTraces, "skip-traces", false, "Skip trace validation")
 
 	rootCmd.AddCommand(validateLeveldbCmd)
 }
@@ -44,9 +46,10 @@ func validateLeveldb(*cobra.Command, []string) {
 	cmd.FatalIfErr(err, "Failed to create client")
 	defer client.Close()
 
+	// normalize block range
 	blockFrom, blockTo := mustNormalizeBlockRange(client, validateLeveldbCmdArgs.blockFrom, validateLeveldbCmdArgs.numBlocks, ethTypes.FinalizedBlockNumber)
-	logrus.WithField("from", blockFrom).WithField("to", blockTo).Info("Block range normalized")
 
+	// prepare tmp db
 	path, err := os.MkdirTemp("", "confura-data-cache-")
 	cmd.FatalIfErr(err, "Failed to create tmp dir")
 	defer os.RemoveAll(path)
@@ -59,24 +62,47 @@ func validateLeveldb(*cobra.Command, []string) {
 	cmd.FatalIfErr(err, "Failed to create store")
 	defer store.Close()
 
+	// start rpc and gRPC service
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	rpcConfig := rpc.DefaultConfig()
+	go rpc.MustServeRPC(ctx, &wg, rpcConfig, store)
+	go rpc.MustServeGRPC(ctx, &wg, rpcConfig, store)
+	time.Sleep(time.Second)
+
+	// prepare rpc and rRPC client
+	rpcClient, err := rpc.NewClient(fmt.Sprintf("http://127.0.0.1%v", rpcConfig.Endpoint))
+	cmd.FatalIfErr(err, "Failed to create rpc client")
+	defer rpcClient.Close()
+	grpcClient, err := rpc.NewClientProto(fmt.Sprintf("127.0.0.1%v", rpcConfig.Proto.Endpoint))
+	cmd.FatalIfErr(err, "Failed to create grpc client")
+
 	var (
-		cache       = make(map[uint64]types.EthBlockData)
-		numBlocks   int
-		numTxs      int
-		numReceipts int
-		numTraces   int
-		queryOpt    = types.EthQueryOption{
-			SkipTraces: validateLeveldbCmdArgs.skipTraces,
+		cache = make(map[uint64]EthBlockDataExt)
+		stat  struct {
+			Blocks   int
+			Txs      int
+			Receipts int
+			Traces   int
 		}
 	)
 
 	// read data from full node and write into store
-	logrus.Info("Begin to retrieve eth block data from fullnode ...")
+	logrus.WithField("from", blockFrom).WithField("to", blockTo).Info("Begin to retrieve eth block data from fullnode ...")
 	for i := blockFrom; i <= blockTo; i++ {
-		data, err := types.QueryEthBlockData(client, i, queryOpt)
+		var data EthBlockDataExt
+
+		data.EthBlockData, err = types.QueryEthBlockData(client, i)
 		cmd.FatalIfErr(err, "Failed to query eth block data")
 
-		err = store.Write(data)
+		data.BlockSummary, err = client.Eth.BlockByNumber(ethTypes.NewBlockNumber(int64(i)), false)
+		cmd.FatalIfErr(err, "Failed to query block without txs")
+
+		err = store.Write(data.EthBlockData)
 		cmd.FatalIfErr(err, "Failed to write eth block data to store")
 
 		cache[i] = data
@@ -88,21 +114,18 @@ func validateLeveldb(*cobra.Command, []string) {
 			"traces":   len(data.Traces),
 		}).Debug("Succeeded to retrieve eth block data")
 
-		numBlocks++
-		numTxs += len(data.Block.Transactions.Transactions())
-		numReceipts += len(data.Receipts)
-		numTraces += len(data.Traces)
+		stat.Blocks++
+		stat.Txs += len(data.Block.Transactions.Transactions())
+		stat.Receipts += len(data.Receipts)
+		stat.Traces += len(data.Traces)
 	}
 
-	// validate data in database
-	logrus.WithFields(logrus.Fields{
-		"blocks":   numBlocks,
-		"txs":      numTxs,
-		"receipts": numReceipts,
-		"traces":   numTraces,
-	}).Info("Begin to validate eth block data in store ...")
+	// validate data against rpc and gRPC
+	logrus.WithField("stat", fmt.Sprintf("%+v", stat)).Info("Begin to validate eth block data ...")
 	for i := blockFrom; i <= blockTo; i++ {
-		mustValidateEthBlockData(cache, store, i)
+		mustValidateEthBlockData(cache, rpcClient, i)
+		mustValidateEthBlockData(cache, grpcClient, i)
+
 		logrus.WithFields(logrus.Fields{
 			"block":    i,
 			"txs":      len(cache[i].Block.Transactions.Transactions()),
@@ -111,12 +134,10 @@ func validateLeveldb(*cobra.Command, []string) {
 		}).Debug("Succeeded to validate eth block data")
 	}
 
-	logrus.WithFields(logrus.Fields{
-		"blocks":   numBlocks,
-		"txs":      numTxs,
-		"receipts": numReceipts,
-		"traces":   numTraces,
-	}).Info("Succeeded to validate LevelDB")
+	logrus.WithField("stat", fmt.Sprintf("%+v", stat)).Info("Succeeded to validate LevelDB")
+
+	cancel()
+	wg.Wait()
 }
 
 func mustNormalizeBlockRange(client *web3go.Client, blockFrom int64, numBlocks uint64, latestBlockNumberTag ethTypes.BlockNumber) (uint64, uint64) {
@@ -146,44 +167,53 @@ func mustNormalizeBlockRange(client *web3go.Client, blockFrom int64, numBlocks u
 	return from, to
 }
 
-func mustValidateEthBlockData(cache map[uint64]types.EthBlockData, store *leveldb.Store, bn uint64) {
-	// block
-	block, err := store.GetBlock(types.BlockHashOrNumberWithNumber(bn))
-	assertJsonEqual(err, bn, "GetBlockByNumber", cache[bn].Block, block.MustLoad())
+func mustValidateEthBlockData(cache map[uint64]EthBlockDataExt, client rpc.Interface, bn uint64) {
+	// block - by number
+	block, err := client.GetBlock(types.BlockHashOrNumberWithNumber(bn), true)
+	assertJsonEqual(err, bn, "GetBlockByNumber_true", cache[bn].Block, block.MustLoad())
+
+	block, err = client.GetBlock(types.BlockHashOrNumberWithNumber(bn), false)
+	assertJsonEqual(err, bn, "GetBlockByNumber_false", cache[bn].BlockSummary, block.MustLoad())
+
+	// block - by hash
 	blockHash := block.MustLoad().Hash
+	block, err = client.GetBlock(types.BlockHashOrNumberWithHash(blockHash), true)
+	assertJsonEqual(err, bn, "GetBlockByHash_true", cache[bn].Block, block.MustLoad())
 
-	block, err = store.GetBlock(types.BlockHashOrNumberWithHash(blockHash))
-	assertJsonEqual(err, bn, "GetBlockByHash", cache[bn].Block, block.MustLoad())
+	block, err = client.GetBlock(types.BlockHashOrNumberWithHash(blockHash), false)
+	assertJsonEqual(err, bn, "GetBlockByHash_false", cache[bn].BlockSummary, block.MustLoad())
 
-	txCount, err := store.GetBlockTransactionCount(types.BlockHashOrNumberWithNumber(bn))
+	// block txs - by number
+	txCount, err := client.GetBlockTransactionCount(types.BlockHashOrNumberWithNumber(bn))
 	assertJsonEqual(err, bn, "GetBlockTransactionCountByNumber", len(cache[bn].Block.Transactions.Transactions()), txCount)
 
-	txCount, err = store.GetBlockTransactionCount(types.BlockHashOrNumberWithHash(blockHash))
+	// block txs - by hash
+	txCount, err = client.GetBlockTransactionCount(types.BlockHashOrNumberWithHash(blockHash))
 	assertJsonEqual(err, bn, "GetBlockTransactionCountByHash", len(cache[bn].Block.Transactions.Transactions()), txCount)
 
 	// transaction
 	for i, v := range cache[bn].Block.Transactions.Transactions() {
-		tx, err := store.GetTransactionByHash(v.Hash)
+		tx, err := client.GetTransactionByHash(v.Hash)
 		assertJsonEqual(err, bn, "GetTransactionByHash", v, tx, logrus.Fields{"txIndex": i})
 
-		tx, err = store.GetTransactionByIndex(types.BlockHashOrNumberWithHash(blockHash), uint32(i))
+		tx, err = client.GetTransactionByIndex(types.BlockHashOrNumberWithHash(blockHash), uint32(i))
 		assertJsonEqual(err, bn, "GetTransactionByBlockHashAndIndex", v, tx, logrus.Fields{"txIndex": i})
 
-		tx, err = store.GetTransactionByIndex(types.BlockHashOrNumberWithNumber(bn), uint32(i))
+		tx, err = client.GetTransactionByIndex(types.BlockHashOrNumberWithNumber(bn), uint32(i))
 		assertJsonEqual(err, bn, "GetTransactionByBlockNumberAndIndex", v, tx, logrus.Fields{"txIndex": i})
 	}
 
 	// tx receipt
 	for i, v := range cache[bn].Receipts {
-		receipt, err := store.GetTransactionReceipt(v.TransactionHash)
+		receipt, err := client.GetTransactionReceipt(v.TransactionHash)
 		assertJsonEqual(err, bn, "GetTransactionReceipt", v, receipt, logrus.Fields{"txIndex": i})
 	}
 
 	// block receipts
-	receipts, err := store.GetBlockReceipts(types.BlockHashOrNumberWithNumber(bn))
+	receipts, err := client.GetBlockReceipts(types.BlockHashOrNumberWithNumber(bn))
 	assertJsonEqual(err, bn, "GetBlockReceiptsByNumber", cache[bn].Receipts, receipts)
 
-	receipts, err = store.GetBlockReceipts(types.BlockHashOrNumberWithHash(blockHash))
+	receipts, err = client.GetBlockReceipts(types.BlockHashOrNumberWithHash(blockHash))
 	assertJsonEqual(err, bn, "GetBlockReceiptsByHash", cache[bn].Receipts, receipts)
 
 	// tx traces
@@ -195,15 +225,15 @@ func mustValidateEthBlockData(cache map[uint64]types.EthBlockData, store *leveld
 			}
 		}
 
-		traces, err := store.GetTransactionTraces(tx.Hash)
+		traces, err := client.GetTransactionTraces(tx.Hash)
 		assertJsonEqual(err, bn, "GetTransactionTraces", txTraces, traces, logrus.Fields{"txIndex": i})
 	}
 
 	// block traces
-	traces, err := store.GetBlockTraces(types.BlockHashOrNumberWithNumber(bn))
+	traces, err := client.GetBlockTraces(types.BlockHashOrNumberWithNumber(bn))
 	assertJsonEqual(err, bn, "GetBlockTracesByNumber", cache[bn].Traces, traces)
 
-	traces, err = store.GetBlockTraces(types.BlockHashOrNumberWithHash(blockHash))
+	traces, err = client.GetBlockTraces(types.BlockHashOrNumberWithHash(blockHash))
 	assertJsonEqual(err, bn, "GetBlockTracesByHash", cache[bn].Traces, traces)
 }
 
@@ -243,4 +273,9 @@ func assertJsonEqual(err error, bn uint64, api string, expected any, actual any,
 
 		logrus.WithFields(args).Fatal("Data mismatch")
 	}
+}
+
+type EthBlockDataExt struct {
+	types.EthBlockData
+	BlockSummary *ethTypes.Block // block with only tx hashes
 }
