@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -56,4 +57,59 @@ func TestBlockHashOrNumberNumber(t *testing.T) {
 	assert.Equal(t, common.Hash{}, hash)
 	assert.False(t, ok)
 	assert.Equal(t, uint64(77), number)
+}
+
+func TestIsRpcMethodNotSupportedError(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "method not found, lowercase",
+			err:      errors.New("method eth_xyz not found"),
+			expected: true,
+		},
+		{
+			name:     "method not exist, mixed case",
+			err:      errors.New("Method abc does NOT exist"),
+			expected: true,
+		},
+		{
+			name:     "method not available, uppercase",
+			err:      errors.New("METHOD trace_foo NOT AVAILABLE"),
+			expected: true,
+		},
+		{
+			name:     "unrelated error message",
+			err:      errors.New("some internal error"),
+			expected: false,
+		},
+		{
+			name:     "method not supported error",
+			err:      errors.New("the method eth_getBlockByNumbers does not exist/is not available"),
+			expected: true,
+		},
+		{
+			name:     "method not found",
+			err:      errors.New("Method not found"),
+			expected: true,
+		},
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := isRpcMethodNotSupportedError(c.err)
+			if got != c.expected {
+				t.Errorf("Expected %v, got %v", c.expected, got)
+			}
+		})
+	}
 }
