@@ -2,6 +2,9 @@ package types
 
 import (
 	"encoding/json"
+	"regexp"
+	"strings"
+	"sync/atomic"
 
 	"github.com/Conflux-Chain/go-conflux-util/metrics"
 	"github.com/ethereum/go-ethereum/common"
@@ -9,6 +12,25 @@ import (
 	"github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 )
+
+var (
+	// ethTraceRpcKnownSupported is an atomic value which stores whether eth trace RPC is supported.
+	// - If nil: The support status of eth trace RPC is unknown.
+	// - If non-nil (and stores true): eth trace RPC is known to be supported.
+	// - If non-nil (and stores false): eth trace RPC is known to be unsupported.
+	ethTraceRpcKnownSupported atomic.Value
+
+	errTraceRpcNotSupported  = errors.New("trace RPC not supported")
+	rpcMethodNotFoundPattern = regexp.MustCompile(`method.*(?:not found|not exist|not available)`)
+)
+
+// isRpcMethodNotSupportedError checks whether the error indicates an unsupported RPC method.
+func isRpcMethodNotSupportedError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return rpcMethodNotFoundPattern.MatchString(strings.ToLower(err.Error()))
+}
 
 // EthBlockData contains all required data in a block.
 type EthBlockData struct {
@@ -70,16 +92,7 @@ func (d *EthBlockData) Verify() error {
 	return nil
 }
 
-type EthQueryOption struct {
-	SkipTraces bool
-}
-
-func QueryEthBlockData(client *web3go.Client, blockNumber uint64, options ...EthQueryOption) (EthBlockData, error) {
-	var opt EthQueryOption
-	if len(options) > 0 {
-		opt = options[0]
-	}
-
+func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData, error) {
 	bn := types.NewBlockNumber(int64(blockNumber))
 	block, err := client.Eth.BlockByNumber(bn, true)
 	if err != nil {
@@ -100,16 +113,12 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64, options ...Eth
 		return EthBlockData{}, errors.Errorf("Cannot find receipts by block number %v", blockNumber)
 	}
 
-	var traces []types.LocalizedTrace
-	if !opt.SkipTraces {
-		traces, err = client.Trace.Blocks(bnoh)
-		if err != nil {
-			return EthBlockData{}, errors.WithMessage(err, "Failed to get block traces")
-		}
-
-		if traces == nil {
-			return EthBlockData{}, errors.Errorf("Cannot find traces by block number %v", blockNumber)
-		}
+	traces, err := QueryEthBlockTraces(client, bnoh)
+	if err != nil && !errors.Is(err, errTraceRpcNotSupported) {
+		return EthBlockData{}, errors.WithMessage(err, "Failed to get block traces")
+	}
+	if err == nil && traces == nil {
+		return EthBlockData{}, errors.Errorf("Cannot find traces by block number %v", blockNumber)
 	}
 
 	data := EthBlockData{
@@ -123,6 +132,26 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64, options ...Eth
 	metrics.GetOrRegisterHistogram("types/eth/block/size").Update(int64(NewSized(data).Size))
 
 	return data, nil
+}
+
+func QueryEthBlockTraces(client *web3go.Client, bnoh types.BlockNumberOrHash) ([]types.LocalizedTrace, error) {
+	traceRpcSuppported, confirmed := ethTraceRpcKnownSupported.Load().(bool)
+	if confirmed && !traceRpcSuppported {
+		return nil, errTraceRpcNotSupported
+	}
+
+	traces, err := client.Trace.Blocks(bnoh)
+	if err == nil {
+		ethTraceRpcKnownSupported.Store(true)
+		return traces, nil
+	}
+
+	if !confirmed && isRpcMethodNotSupportedError(err) {
+		ethTraceRpcKnownSupported.Store(false)
+		return nil, errTraceRpcNotSupported
+	}
+
+	return nil, err
 }
 
 type BlockHashOrNumber struct {

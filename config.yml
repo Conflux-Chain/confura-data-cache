@@ -32,9 +32,6 @@
 #     serialOption:
 #       routines:
 #       window:
-#     # Trace extraction
-#     trace:
-#       disabled: false
 #   # Health configurations
 #   health:
 #     threshold: 1m
