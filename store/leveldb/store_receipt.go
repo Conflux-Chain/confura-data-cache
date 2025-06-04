@@ -55,11 +55,10 @@ func (store *Store) GetBlockReceipts(bhon types.BlockHashOrNumber) (types.Lazy[[
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
 
-	var receipts types.Lazy[[]ethTypes.Receipt]
-	ok, err = store.readJson(store.keyBlockNumber2ReceiptsPool, blockNumberBuf[:], &receipts)
+	data, ok, err := store.read(store.keyBlockNumber2ReceiptsPool, blockNumberBuf[:])
 	if err != nil || !ok {
 		return types.Lazy[[]ethTypes.Receipt]{}, err
 	}
 
-	return receipts, nil
+	return types.NewLazyWithJson[[]ethTypes.Receipt](data), nil
 }

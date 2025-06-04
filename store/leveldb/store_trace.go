@@ -62,11 +62,10 @@ func (store *Store) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]e
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
 
-	var traces types.Lazy[[]ethTypes.LocalizedTrace]
-	ok, err = store.readJson(store.keyBlockNumber2TracesPool, blockNumberBuf[:], &traces)
+	data, ok, err := store.read(store.keyBlockNumber2TracesPool, blockNumberBuf[:])
 	if err != nil || !ok {
 		return types.Lazy[[]ethTypes.LocalizedTrace]{}, err
 	}
 
-	return traces, nil
+	return types.NewLazyWithJson[[]ethTypes.LocalizedTrace](data), nil
 }

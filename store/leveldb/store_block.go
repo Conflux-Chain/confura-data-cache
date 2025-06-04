@@ -53,13 +53,12 @@ func (store *Store) GetBlock(bhon types.BlockHashOrNumber) (types.Lazy[*ethTypes
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], number)
 
-	var block types.Lazy[*ethTypes.Block]
-	ok, err = store.readJson(store.keyBlockNumber2BlockPool, blockNumberBuf[:], &block)
+	data, ok, err := store.read(store.keyBlockNumber2BlockPool, blockNumberBuf[:])
 	if err != nil || !ok {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
-	return block, nil
+	return types.NewLazyWithJson[*ethTypes.Block](data), nil
 }
 
 // GetBlockTransactionCount returns the transaction count for the given block hash or number.

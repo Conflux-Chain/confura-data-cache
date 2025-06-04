@@ -1,12 +1,8 @@
 package rpc
 
 import (
-	"encoding/json"
-	reflect "reflect"
-
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/pkg/errors"
 )
 
 func NewBlockId(bhon types.BlockHashOrNumber) *BlockId {
@@ -40,11 +36,5 @@ func ResponseToLazy[T any](resp *DataResponse, err error) (types.Lazy[T], error)
 		return types.Lazy[T]{}, err
 	}
 
-	var result types.Lazy[T]
-
-	if err := json.Unmarshal(resp.GetData(), &result); err != nil {
-		return types.Lazy[T]{}, errors.WithMessagef(err, "Failed to unmarshal lazy object of generic type: %v", reflect.TypeFor[T]())
-	}
-
-	return result, nil
+	return types.NewLazyWithJson[T](resp.GetData()), nil
 }
