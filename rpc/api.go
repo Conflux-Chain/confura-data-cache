@@ -27,6 +27,8 @@ func NewApi(store *leveldb.Store, lruCacheSize int) *Api {
 }
 
 func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[*ethTypes.Block], error) {
+	metrics.GetBlockIsFull().Mark(isFull)
+
 	number, ok, err := api.Store.GetBlockNumber(bhon)
 	if err != nil || !ok {
 		return types.Lazy[*ethTypes.Block]{}, err
@@ -38,8 +40,10 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 		cache = api.blockCache
 	}
 
-	if block, ok := cache.Get(number); ok {
-		return block, nil
+	cachedBlock, ok := cache.Get(number)
+	metrics.GetBlockHitCache(isFull).Mark(ok)
+	if ok {
+		return cachedBlock, nil
 	}
 
 	// load from store
