@@ -47,7 +47,7 @@ func (store *Store) GetTransactionReceipt(txHash common.Hash) (*ethTypes.Receipt
 
 // GetBlockReceipts returns all block receipts for the given block hash or number. If not found, returns nil.
 func (store *Store) GetBlockReceipts(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.Receipt], error) {
-	blockNumber, ok, err := store.getBlockNumber(bhon)
+	blockNumber, ok, err := store.GetBlockNumber(bhon)
 	if err != nil || !ok {
 		return types.Lazy[[]ethTypes.Receipt]{}, err
 	}

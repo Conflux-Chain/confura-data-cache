@@ -54,7 +54,7 @@ func (store *Store) GetTransactionTraces(txHash common.Hash) ([]ethTypes.Localiz
 
 // GetBlockTraces returns all block traces for the given block hash or number. If not found, returns nil.
 func (store *Store) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
-	blockNumber, ok, err := store.getBlockNumber(bhon)
+	blockNumber, ok, err := store.GetBlockNumber(bhon)
 	if err != nil || !ok {
 		return types.Lazy[[]ethTypes.LocalizedTrace]{}, err
 	}

@@ -15,30 +15,46 @@ var _ Interface = (*Api)(nil)
 type Api struct {
 	*leveldb.Store
 
+	blockCache        *lru.Cache[uint64, types.Lazy[*ethTypes.Block]]
 	blockSummaryCache *lru.Cache[uint64, types.Lazy[*ethTypes.Block]]
 }
 
 func NewApi(store *leveldb.Store, lruCacheSize int) *Api {
-	cache, _ := lru.New[uint64, types.Lazy[*ethTypes.Block]](lruCacheSize)
-	return &Api{store, cache}
+	api := Api{Store: store}
+	api.blockCache, _ = lru.New[uint64, types.Lazy[*ethTypes.Block]](lruCacheSize)
+	api.blockSummaryCache, _ = lru.New[uint64, types.Lazy[*ethTypes.Block]](lruCacheSize)
+	return &api
 }
 
 func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[*ethTypes.Block], error) {
-	// try to return block summary from cache
-	if !isFull {
-		if _, ok, number := bhon.HashOrNumber(); !ok {
-			if block, ok := api.blockSummaryCache.Get(number); ok {
-				return block, nil
-			}
-		}
+	number, ok, err := api.Store.GetBlockNumber(bhon)
+	if err != nil || !ok {
+		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
+	// try to load from cache
+	cache := api.blockSummaryCache
+	if isFull {
+		cache = api.blockCache
+	}
+
+	if block, ok := cache.Get(number); ok {
+		return block, nil
+	}
+
+	// load from store
 	blockLazy, err := api.Store.GetBlock(bhon)
 	if err != nil {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
+	// block not found
+	if blockLazy.IsEmptyOrNull() {
+		return types.Lazy[*ethTypes.Block]{}, nil
+	}
+
 	if isFull {
+		api.blockCache.Add(number, blockLazy)
 		return blockLazy, nil
 	}
 
@@ -69,7 +85,7 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 		return types.Lazy[*ethTypes.Block]{}, errors.WithMessage(err, "Failed to create lazy block summary")
 	}
 
-	api.blockSummaryCache.Add(block.Number.Uint64(), result)
+	api.blockSummaryCache.Add(number, result)
 
 	return result, nil
 }
