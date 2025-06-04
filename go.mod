@@ -6,6 +6,7 @@ require (
 	github.com/Conflux-Chain/go-conflux-util v0.4.1
 	github.com/DmitriyVTitov/size v1.5.0
 	github.com/ethereum/go-ethereum v1.14.5
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/openweb3/go-rpc-provider v0.3.4
 	github.com/openweb3/web3go v0.2.11
