@@ -20,6 +20,10 @@ func NewLazy[T any](v T) (Lazy[T], error) {
 	return Lazy[T]{encoded}, nil
 }
 
+func NewLazyWithJson[T any](jsonData []byte) Lazy[T] {
+	return Lazy[T]{jsonData}
+}
+
 // MarshalJSON implements the json.Marshaler interface.
 func (lazy Lazy[T]) MarshalJSON() ([]byte, error) {
 	if len(lazy.encoded) > 0 {

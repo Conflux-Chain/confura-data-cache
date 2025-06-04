@@ -49,18 +49,18 @@ func (store *Store) read(pool *KeyPool, key []byte, expectedValueSize ...int) ([
 	return value, true, nil
 }
 
-func (store *Store) readJson(pool *KeyPool, key []byte, valuePointer any) (bool, error) {
-	value, ok, err := store.read(pool, key)
-	if err != nil || !ok {
-		return false, err
-	}
+// func (store *Store) readJson(pool *KeyPool, key []byte, valuePointer any) (bool, error) {
+// 	value, ok, err := store.read(pool, key)
+// 	if err != nil || !ok {
+// 		return false, err
+// 	}
 
-	if err = json.Unmarshal(value, valuePointer); err != nil {
-		return false, errors.WithMessage(err, "Failed to unmarshal JSON value to object")
-	}
+// 	if err = json.Unmarshal(value, valuePointer); err != nil {
+// 		return false, errors.WithMessage(err, "Failed to unmarshal JSON value to object")
+// 	}
 
-	return true, nil
-}
+// 	return true, nil
+// }
 
 func (store *Store) readUint64(key []byte) (uint64, bool, error) {
 	value, err := store.db.Get(key, nil)

@@ -24,8 +24,8 @@ func (store *Store) writeBlock(batch *leveldb.Batch, block *ethTypes.Block) {
 	store.write(batch, store.keyBlockNumber2TxCountPool, blockNumberBuf[:], txCountBuf[:])
 }
 
-// getBlockNumber returns block number for the given block hash or number if any.
-func (store *Store) getBlockNumber(bhon types.BlockHashOrNumber) (uint64, bool, error) {
+// GetBlockNumber returns block number for the given block hash or number if any.
+func (store *Store) GetBlockNumber(bhon types.BlockHashOrNumber) (uint64, bool, error) {
 	hash, ok, number := bhon.HashOrNumber()
 	if !ok {
 		return number, true, nil
@@ -45,7 +45,7 @@ func (store *Store) getBlockNumber(bhon types.BlockHashOrNumber) (uint64, bool, 
 
 // GetBlock returns block for the given block hash or number. If not found, returns nil.
 func (store *Store) GetBlock(bhon types.BlockHashOrNumber) (types.Lazy[*ethTypes.Block], error) {
-	number, ok, err := store.getBlockNumber(bhon)
+	number, ok, err := store.GetBlockNumber(bhon)
 	if err != nil || !ok {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
@@ -53,19 +53,18 @@ func (store *Store) GetBlock(bhon types.BlockHashOrNumber) (types.Lazy[*ethTypes
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], number)
 
-	var block types.Lazy[*ethTypes.Block]
-	ok, err = store.readJson(store.keyBlockNumber2BlockPool, blockNumberBuf[:], &block)
+	data, ok, err := store.read(store.keyBlockNumber2BlockPool, blockNumberBuf[:])
 	if err != nil || !ok {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
-	return block, nil
+	return types.NewLazyWithJson[*ethTypes.Block](data), nil
 }
 
 // GetBlockTransactionCount returns the transaction count for the given block hash or number.
 // Returns -1 if the given block hash not found.
 func (store *Store) GetBlockTransactionCount(bhon types.BlockHashOrNumber) (int64, error) {
-	blockNumber, ok, err := store.getBlockNumber(bhon)
+	blockNumber, ok, err := store.GetBlockNumber(bhon)
 	if err != nil || !ok {
 		return -1, err
 	}

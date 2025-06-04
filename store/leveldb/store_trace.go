@@ -54,7 +54,7 @@ func (store *Store) GetTransactionTraces(txHash common.Hash) ([]ethTypes.Localiz
 
 // GetBlockTraces returns all block traces for the given block hash or number. If not found, returns nil.
 func (store *Store) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
-	blockNumber, ok, err := store.getBlockNumber(bhon)
+	blockNumber, ok, err := store.GetBlockNumber(bhon)
 	if err != nil || !ok {
 		return types.Lazy[[]ethTypes.LocalizedTrace]{}, err
 	}
@@ -62,11 +62,10 @@ func (store *Store) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]e
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], blockNumber)
 
-	var traces types.Lazy[[]ethTypes.LocalizedTrace]
-	ok, err = store.readJson(store.keyBlockNumber2TracesPool, blockNumberBuf[:], &traces)
+	data, ok, err := store.read(store.keyBlockNumber2TracesPool, blockNumberBuf[:])
 	if err != nil || !ok {
 		return types.Lazy[[]ethTypes.LocalizedTrace]{}, err
 	}
 
-	return traces, nil
+	return types.NewLazyWithJson[[]ethTypes.LocalizedTrace](data), nil
 }

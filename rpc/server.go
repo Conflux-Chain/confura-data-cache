@@ -22,7 +22,7 @@ type Config struct {
 	VirtualHosts []string `default:"[*]"`
 	JwtSecretHex string   // without 0x prefix
 
-	LruCacheSize uint32 `default:"1024"`
+	LruCacheSize uint32 `default:"4096"`
 
 	Proto struct {
 		Endpoint string `default:":48545"`
