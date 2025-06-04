@@ -13,6 +13,7 @@
 #   cors: ["*"]
 #   virtualHosts: ["*"]
 #   jwtSecretHex: 
+#   lruCacheSize: 1024
 #   proto:
 #     endpoint: :48545
 

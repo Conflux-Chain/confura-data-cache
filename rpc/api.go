@@ -4,6 +4,7 @@ import (
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
+	lru "github.com/hashicorp/golang-lru/v2"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 )
@@ -13,13 +14,25 @@ var _ Interface = (*Api)(nil)
 // Api is the eth RPC implementation.
 type Api struct {
 	*leveldb.Store
+
+	blockSummaryCache *lru.Cache[uint64, types.Lazy[*ethTypes.Block]]
 }
 
-func NewApi(store *leveldb.Store) *Api {
-	return &Api{store}
+func NewApi(store *leveldb.Store, lruCacheSize int) *Api {
+	cache, _ := lru.New[uint64, types.Lazy[*ethTypes.Block]](lruCacheSize)
+	return &Api{store, cache}
 }
 
 func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[*ethTypes.Block], error) {
+	// try to return block summary from cache
+	if !isFull {
+		if _, ok, number := bhon.HashOrNumber(); !ok {
+			if block, ok := api.blockSummaryCache.Get(number); ok {
+				return block, nil
+			}
+		}
+	}
+
 	blockLazy, err := api.Store.GetBlock(bhon)
 	if err != nil {
 		return types.Lazy[*ethTypes.Block]{}, err
@@ -42,17 +55,23 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 	txs := block.Transactions.Transactions()
 	if txs == nil {
 		block.Transactions = *ethTypes.NewTxOrHashListByHashes(nil)
-		return types.NewLazy(block)
+	} else {
+		hashes := make([]common.Hash, 0, len(txs))
+		for _, v := range block.Transactions.Transactions() {
+			hashes = append(hashes, v.Hash)
+		}
+
+		block.Transactions = *ethTypes.NewTxOrHashListByHashes(hashes)
 	}
 
-	hashes := make([]common.Hash, 0, len(txs))
-	for _, v := range block.Transactions.Transactions() {
-		hashes = append(hashes, v.Hash)
+	result, err := types.NewLazy(block)
+	if err != nil {
+		return types.Lazy[*ethTypes.Block]{}, errors.WithMessage(err, "Failed to create lazy block summary")
 	}
 
-	block.Transactions = *ethTypes.NewTxOrHashListByHashes(hashes)
+	api.blockSummaryCache.Add(block.Number.Uint64(), result)
 
-	return types.NewLazy(block)
+	return result, nil
 }
 
 func (api *Api) GetTransactionByHash(txHash common.Hash) (types.Lazy[*ethTypes.TransactionDetail], error) {
