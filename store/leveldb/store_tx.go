@@ -51,7 +51,7 @@ func (store *Store) GetTransactionByHash(txHash common.Hash) (*ethTypes.Transact
 
 // GetTransactionByIndex returns transaction for the given block hash or number along with transaction index. If not found, returns nil.
 func (store *Store) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex uint32) (*ethTypes.TransactionDetail, error) {
-	blockLazy, err := store.GetBlock(bhon)
+	blockLazy, err := store.GetBlock(bhon, true)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to get block by hash or number")
 	}

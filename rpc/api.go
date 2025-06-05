@@ -6,7 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	lru "github.com/hashicorp/golang-lru/v2"
 	ethTypes "github.com/openweb3/web3go/types"
-	"github.com/pkg/errors"
 )
 
 var _ Interface = (*Api)(nil)
@@ -47,51 +46,17 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 	}
 
 	// load from store
-	blockLazy, err := api.Store.GetBlock(bhon)
+	block, err := api.Store.GetBlock(bhon, isFull)
 	if err != nil {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
 
-	// block not found
-	if blockLazy.IsEmptyOrNull() {
-		return types.Lazy[*ethTypes.Block]{}, nil
+	// add into cache if found
+	if !block.IsEmptyOrNull() {
+		cache.Add(number, block)
 	}
 
-	if isFull {
-		api.blockCache.Add(number, blockLazy)
-		return blockLazy, nil
-	}
-
-	// construct tx hash list
-	block, err := blockLazy.Load()
-	if err != nil {
-		return types.Lazy[*ethTypes.Block]{}, errors.WithMessage(err, "Failed to unmarshal block")
-	}
-
-	if block == nil {
-		return types.Lazy[*ethTypes.Block]{}, nil
-	}
-
-	txs := block.Transactions.Transactions()
-	if txs == nil {
-		block.Transactions = *ethTypes.NewTxOrHashListByHashes(nil)
-	} else {
-		hashes := make([]common.Hash, 0, len(txs))
-		for _, v := range block.Transactions.Transactions() {
-			hashes = append(hashes, v.Hash)
-		}
-
-		block.Transactions = *ethTypes.NewTxOrHashListByHashes(hashes)
-	}
-
-	result, err := types.NewLazy(block)
-	if err != nil {
-		return types.Lazy[*ethTypes.Block]{}, errors.WithMessage(err, "Failed to create lazy block summary")
-	}
-
-	api.blockSummaryCache.Add(number, result)
-
-	return result, nil
+	return block, nil
 }
 
 func (api *Api) GetTransactionByHash(txHash common.Hash) (types.Lazy[*ethTypes.TransactionDetail], error) {

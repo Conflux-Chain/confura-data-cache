@@ -9,14 +9,19 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func (store *Store) writeBlock(batch *leveldb.Batch, block *ethTypes.Block) {
+func (store *Store) writeBlock(batch *leveldb.Batch, data types.EthBlockData) {
 	// block hash -> block number
 	var blockNumberBuf [8]byte
+	block := data.Block
 	binary.BigEndian.PutUint64(blockNumberBuf[:], block.Number.Uint64())
 	store.write(batch, store.keyBlockHash2NumberPool, block.Hash.Bytes(), blockNumberBuf[:])
 
 	// block number -> block
 	store.writeJson(batch, store.keyBlockNumber2BlockPool, blockNumberBuf[:], block)
+
+	// block number -> block summary
+	blockSummary := data.BlockSummary()
+	store.writeJson(batch, store.keyBlockNumber2BlockSummaryPool, blockNumberBuf[:], blockSummary)
 
 	// block number -> transaction count
 	var txCountBuf [8]byte
@@ -44,7 +49,7 @@ func (store *Store) GetBlockNumber(bhon types.BlockHashOrNumber) (uint64, bool, 
 }
 
 // GetBlock returns block for the given block hash or number. If not found, returns nil.
-func (store *Store) GetBlock(bhon types.BlockHashOrNumber) (types.Lazy[*ethTypes.Block], error) {
+func (store *Store) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[*ethTypes.Block], error) {
 	number, ok, err := store.GetBlockNumber(bhon)
 	if err != nil || !ok {
 		return types.Lazy[*ethTypes.Block]{}, err
@@ -53,7 +58,12 @@ func (store *Store) GetBlock(bhon types.BlockHashOrNumber) (types.Lazy[*ethTypes
 	var blockNumberBuf [8]byte
 	binary.BigEndian.PutUint64(blockNumberBuf[:], number)
 
-	data, ok, err := store.read(store.keyBlockNumber2BlockPool, blockNumberBuf[:])
+	keyPool := store.keyBlockNumber2BlockSummaryPool
+	if isFull {
+		keyPool = store.keyBlockNumber2BlockPool
+	}
+
+	data, ok, err := store.read(keyPool, blockNumberBuf[:])
 	if err != nil || !ok {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}

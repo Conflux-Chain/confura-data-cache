@@ -39,6 +39,24 @@ type EthBlockData struct {
 	Traces   []types.LocalizedTrace
 }
 
+func (d *EthBlockData) BlockSummary() *types.Block {
+	block := *d.Block
+
+	var hashes []common.Hash
+
+	if txs := block.Transactions.Transactions(); txs != nil {
+		hashes = make([]common.Hash, 0, len(txs))
+
+		for _, tx := range txs {
+			hashes = append(hashes, tx.Hash)
+		}
+	}
+
+	block.Transactions = *types.NewTxOrHashListByHashes(hashes)
+
+	return &block
+}
+
 func (d *EthBlockData) Verify() error {
 	block, receipts, traces := d.Block, d.Receipts, d.Traces
 
