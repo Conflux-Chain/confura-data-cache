@@ -45,6 +45,7 @@ type Store struct {
 	// use object pool for memory saving
 	keyBlockHash2NumberPool           *KeyPool
 	keyBlockNumber2BlockPool          *KeyPool
+	keyBlockNumber2BlockSummaryPool   *KeyPool
 	keyBlockNumber2TxCountPool        *KeyPool
 	keyTxHash2BlockNumberAndIndexPool *KeyPool
 	keyBlockNumber2ReceiptsPool       *KeyPool
@@ -78,6 +79,7 @@ func NewStore(config Config) (*Store, error) {
 
 		keyBlockHash2NumberPool:           NewKeyPool("bh2bn", 32),
 		keyBlockNumber2BlockPool:          NewKeyPool("bn2b", 8),
+		keyBlockNumber2BlockSummaryPool:   NewKeyPool("bn2bs", 8),
 		keyBlockNumber2TxCountPool:        NewKeyPool("bn2tc", 8),
 		keyTxHash2BlockNumberAndIndexPool: NewKeyPool("th2bni", 32),
 		keyBlockNumber2ReceiptsPool:       NewKeyPool("bn2rs", 8),
@@ -156,7 +158,7 @@ func (store *Store) Write(data ...types.EthBlockData) error {
 	for _, v := range data {
 		blockNumber := v.Block.Number.Uint64()
 
-		store.writeBlock(batch, v.Block)
+		store.writeBlock(batch, v)
 		store.writeTransactions(batch, v.Block.Transactions.Transactions())
 		store.writeReceipts(batch, blockNumber, v.Receipts)
 		store.writeTraces(batch, blockNumber, v.Traces)
