@@ -2,7 +2,6 @@ package rpc
 
 import (
 	"context"
-	"encoding/json"
 
 	pb "github.com/Conflux-Chain/confura-data-cache/rpc/proto"
 	"google.golang.org/grpc/codes"
@@ -30,7 +29,7 @@ func (api *ApiProto) GetBlock(ctx context.Context, req *pb.GetBlockRequest) (*pb
 		return nil, api.storeError(err)
 	}
 
-	return api.jsonResponse(block)
+	return pb.NewDataResponse(block)
 }
 
 func (api *ApiProto) GetBlockTransactionCount(ctx context.Context, req *pb.BlockId) (*pb.GetBlockTransactionCountResponse, error) {
@@ -52,7 +51,7 @@ func (api *ApiProto) GetTransactionByHash(ctx context.Context, req *pb.Transacti
 		return nil, api.storeError(err)
 	}
 
-	return api.jsonResponse(tx)
+	return pb.NewDataResponse(tx)
 }
 
 func (api *ApiProto) GetTransactionByIndex(ctx context.Context, req *pb.GetTransactionByIndexRequest) (*pb.DataResponse, error) {
@@ -63,7 +62,7 @@ func (api *ApiProto) GetTransactionByIndex(ctx context.Context, req *pb.GetTrans
 		return nil, api.storeError(err)
 	}
 
-	return api.jsonResponse(tx)
+	return pb.NewDataResponse(tx)
 }
 
 func (api *ApiProto) GetTransactionReceipt(ctx context.Context, req *pb.TransactionId) (*pb.DataResponse, error) {
@@ -74,7 +73,7 @@ func (api *ApiProto) GetTransactionReceipt(ctx context.Context, req *pb.Transact
 		return nil, api.storeError(err)
 	}
 
-	return api.jsonResponse(receipt)
+	return pb.NewDataResponse(receipt)
 }
 
 func (api *ApiProto) GetBlockReceipts(ctx context.Context, req *pb.BlockId) (*pb.DataResponse, error) {
@@ -85,7 +84,7 @@ func (api *ApiProto) GetBlockReceipts(ctx context.Context, req *pb.BlockId) (*pb
 		return nil, api.storeError(err)
 	}
 
-	return api.jsonResponse(receipts)
+	return pb.NewDataResponse(receipts)
 }
 
 func (api *ApiProto) GetTransactionTraces(ctx context.Context, req *pb.TransactionId) (*pb.DataResponse, error) {
@@ -96,7 +95,7 @@ func (api *ApiProto) GetTransactionTraces(ctx context.Context, req *pb.Transacti
 		return nil, api.storeError(err)
 	}
 
-	return api.jsonResponse(traces)
+	return pb.NewDataResponse(traces)
 }
 
 func (api *ApiProto) GetBlockTraces(ctx context.Context, req *pb.BlockId) (*pb.DataResponse, error) {
@@ -107,18 +106,9 @@ func (api *ApiProto) GetBlockTraces(ctx context.Context, req *pb.BlockId) (*pb.D
 		return nil, api.storeError(err)
 	}
 
-	return api.jsonResponse(traces)
+	return pb.NewDataResponse(traces)
 }
 
 func (api *ApiProto) storeError(cause error) error {
 	return status.Errorf(codes.Internal, "Store error: %v", cause.Error())
-}
-
-func (api *ApiProto) jsonResponse(v any) (*pb.DataResponse, error) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to marshal object: %v", v)
-	}
-
-	return &pb.DataResponse{Data: data}, nil
 }

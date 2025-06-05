@@ -3,6 +3,7 @@ package rpc
 import (
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/pkg/errors"
 )
 
 func NewBlockId(bhon types.BlockHashOrNumber) *BlockId {
@@ -37,4 +38,13 @@ func ResponseToLazy[T any](resp *DataResponse, err error) (types.Lazy[T], error)
 	}
 
 	return types.NewLazyWithJson[T](resp.GetData()), nil
+}
+
+func NewDataResponse[T any](v types.Lazy[T]) (*DataResponse, error) {
+	data, err := v.MarshalJSON()
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to marshal lazy object")
+	}
+
+	return &DataResponse{Data: data}, nil
 }
