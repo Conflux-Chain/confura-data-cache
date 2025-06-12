@@ -16,6 +16,7 @@
 #   lruCacheSize: 4096
 #   proto:
 #     endpoint: :48545
+#     maxMessageSize: 67108864
 
 # Synchronization configurations
 # sync:
