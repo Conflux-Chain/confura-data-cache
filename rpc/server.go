@@ -22,10 +22,11 @@ type Config struct {
 	VirtualHosts []string `default:"[*]"`
 	JwtSecretHex string   // without 0x prefix
 
-	LruCacheSize uint32 `default:"4096"`
+	LruCacheSize int `default:"4096"`
 
 	Proto struct {
-		Endpoint string `default:":48545"`
+		Endpoint       string `default:":48545"`
+		MaxMessageSize int    `default:"67108864"` // 64MB
 	}
 }
 
@@ -45,7 +46,7 @@ func MustServeRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store 
 
 	handler := rpc.NewServer()
 
-	if err := handler.RegisterName("eth", NewApi(store, int(config.LruCacheSize))); err != nil {
+	if err := handler.RegisterName("eth", NewApi(store, config.LruCacheSize)); err != nil {
 		logrus.WithError(err).Fatal("Failed to register rpc service")
 	}
 
@@ -77,8 +78,8 @@ func MustServeGRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store
 		logrus.WithError(err).WithField("endpoint", config.Proto.Endpoint).Fatal("Failed to listen for gRPC service")
 	}
 
-	server := grpc.NewServer()
-	pb.RegisterEthServer(server, NewApiProto(NewApi(store, int(config.LruCacheSize))))
+	server := grpc.NewServer(grpc.MaxRecvMsgSize(config.Proto.MaxMessageSize))
+	pb.RegisterEthServer(server, NewApiProto(NewApi(store, config.LruCacheSize)))
 	go server.Serve(listener)
 
 	logrus.WithField("endpoint", config.Proto.Endpoint).Info("Succeeded to run gRPC service")
