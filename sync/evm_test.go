@@ -58,6 +58,20 @@ func (m *MockStore) Write(data ...types.EthBlockData) error {
 	return args.Error(0)
 }
 
+type MockCache struct {
+	mock.Mock
+}
+
+func (m *MockCache) Pop(height uint64) bool {
+	args := m.Called(height)
+	return args.Bool(0)
+}
+
+func (m *MockCache) Put(data *types.Sized[*types.EthBlockData]) error {
+	args := m.Called(data)
+	return args.Error(0)
+}
+
 func TestEthSyncerIntegration(t *testing.T) {
 	endpoint := strings.TrimSpace(os.Getenv("TEST_EVM_RPC_ENDPOINT"))
 	if len(endpoint) == 0 {
@@ -66,7 +80,7 @@ func TestEthSyncerIntegration(t *testing.T) {
 	}
 
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	nextStoreWrite := uint64(100)
@@ -221,4 +235,165 @@ func TestEthSyncerRun(t *testing.T) {
 	wg.Wait()
 	assert.Error(t, ctx.Err())
 	store.AssertCalled(t, "Write", mock.Anything)
+}
+
+func TestEthNearHeadSyncerIntegration(t *testing.T) {
+	endpoint := strings.TrimSpace(os.Getenv("TEST_EVM_RPC_ENDPOINT"))
+	if len(endpoint) == 0 {
+		t.Skip("no rpc endpoint provided, skip test")
+		return
+	}
+
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var latestSynchronizedBlockNum uint64
+	cache := new(MockCache)
+
+	cache.On("Put", mock.Anything).Run(func(args mock.Arguments) {
+		sizedBlockData := args.Get(0).(*types.Sized[*types.EthBlockData])
+		assert.NotEmpty(t, sizedBlockData)
+		assert.NotNil(t, sizedBlockData.Value.Block)
+
+		blockNum := sizedBlockData.Value.Block.Number.Uint64()
+		if latestSynchronizedBlockNum > 0 {
+			assert.Equal(t, blockNum, latestSynchronizedBlockNum+1)
+		}
+		latestSynchronizedBlockNum = blockNum
+	}).Return(nil)
+
+	cache.On("Pop", mock.Anything).Run(func(args mock.Arguments) {
+		reorgHeight := args.Get(0).(uint64)
+		if latestSynchronizedBlockNum > 0 {
+			assert.Equal(t, latestSynchronizedBlockNum, reorgHeight)
+		}
+		latestSynchronizedBlockNum = reorgHeight - 1
+	}).Return(true)
+
+	conf := EthConfig{
+		Extract: extract.EthConfig{
+			RpcEndpoint: endpoint,
+		},
+	}
+	defaults.SetDefaults(&conf)
+
+	syncer, err := newEthNearHeadSyncer(conf, cache, func(conf extract.EthConfig) (EthExtractor, error) {
+		return extract.NewEthExtractor(conf)
+	})
+	assert.NoError(t, err)
+	assert.NotNil(t, syncer)
+
+	wg.Add(1)
+	go syncer.Run(ctx, &wg)
+
+	wg.Wait()
+}
+
+func TestNewNearHeadEthSyncer(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Success", func(t *testing.T) {
+		cache := new(MockCache)
+
+		syncer, err := newEthNearHeadSyncer(EthConfig{}, cache, func(extract.EthConfig) (EthExtractor, error) {
+			return &MockExtractor{}, nil
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, syncer)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		cache := new(MockCache)
+
+		syncer, err := newEthNearHeadSyncer(EthConfig{}, cache, func(extract.EthConfig) (EthExtractor, error) {
+			return nil, errors.New("error creating extractor")
+		})
+		assert.Error(t, err)
+		assert.Nil(t, syncer)
+	})
+}
+
+func TestEthNearHeadSyncerProcessNearHead(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Pop", func(t *testing.T) {
+		cache := new(MockCache)
+		cache.On("Pop", uint64(123)).Return(true)
+
+		syncer := &EthNearHeadSyncer{
+			cache:  cache,
+			health: health.NewTimedCounter(),
+		}
+
+		syncer.processNearHead(&extract.EthRevertableBlockData{
+			ReorgHeight: ptrTo(uint64(123)),
+		})
+
+		cache.AssertCalled(t, "Pop", uint64(123))
+	})
+
+	t.Run("Put", func(t *testing.T) {
+		block := &types.EthBlockData{
+			Block: makeMockBlock(100, "0xabc"),
+		}
+
+		cache := new(MockCache)
+		cache.On("Put", mock.Anything).Return(errors.New("temp")).Once()
+		cache.On("Put", mock.Anything).Return(nil).Once()
+
+		syncer := &EthNearHeadSyncer{
+			cache:  cache,
+			health: health.NewTimedCounter(),
+		}
+
+		syncer.processNearHead(&extract.EthRevertableBlockData{
+			BlockData: block,
+		})
+		cache.AssertNumberOfCalls(t, "Put", 2)
+	})
+}
+
+func TestEthNearHeadSyncerRun(t *testing.T) {
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	blockData := &types.EthBlockData{
+		Block: makeMockBlock(123, "0x123"),
+	}
+	revertableBlockData := &extract.EthRevertableBlockData{
+		BlockData: blockData,
+	}
+
+	cache := new(MockCache)
+	cache.On("Put", mock.Anything).Return(errors.New("temp")).Once()
+	cache.On("Put", mock.Anything).Return(nil).Once()
+
+	extractor := &MockExtractor{}
+	extractor.On("Start", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
+		ch := args.Get(1).(*extract.EthMemoryBoundedChannel)
+		// Simulate sending a block
+		ch.Send(types.NewSized(revertableBlockData))
+	}).Return()
+
+	syncer := &EthNearHeadSyncer{
+		EthConfig: EthConfig{
+			Extract: extract.EthConfig{MaxMemoryUsageBytes: 1024},
+		},
+		cache:             cache,
+		nearHeadExtractor: extractor,
+		health:            health.NewTimedCounter(),
+	}
+
+	wg.Add(1)
+	go syncer.Run(ctx, &wg)
+
+	wg.Wait()
+	assert.Error(t, ctx.Err())
+	cache.AssertCalled(t, "Put", mock.Anything)
+}
+
+func ptrTo[T any](v T) *T {
+	return &v
 }
