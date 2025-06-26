@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/extract"
+	"github.com/Conflux-Chain/confura-data-cache/nearhead"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/health"
@@ -17,6 +18,7 @@ import (
 var (
 	_ EthExtractor = (*extract.EthExtractor)(nil)
 	_ EthStore     = (*leveldb.Store)(nil)
+	_ EthCache     = (*nearhead.EthCache)(nil)
 )
 
 type EthExtractor interface {
@@ -28,6 +30,11 @@ type EthExtractorFactory func(conf extract.EthConfig) (EthExtractor, error)
 type EthStore interface {
 	NextBlockNumber() uint64
 	Write(...types.EthBlockData) error
+}
+
+type EthCache interface {
+	Pop(uint64) bool
+	Put(sized *types.Sized[*types.EthBlockData]) error
 }
 
 type EthSyncer struct {
@@ -79,8 +86,8 @@ func (s *EthSyncer) Run(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			return
-		case res, ok := <-dataChan.RChan():
-			if ok {
+		case res := <-dataChan.RChan():
+			if res != nil {
 				s.processFinalized(res)
 			}
 		}
@@ -129,4 +136,85 @@ func (s *EthSyncer) flushWriteBuffer() error {
 	}
 	s.writeBuffer = s.writeBuffer[:0]
 	return nil
+}
+
+// EthNearHeadSyncer syncs the nearhead block data into memory cache.
+type EthNearHeadSyncer struct {
+	EthConfig
+	cache             EthCache
+	health            *health.TimedCounter
+	nearHeadExtractor EthExtractor
+}
+
+func NewEthNearHeadSyncer(conf EthConfig, cache *nearhead.EthCache) (*EthNearHeadSyncer, error) {
+	extractorFactory := func(conf extract.EthConfig) (EthExtractor, error) {
+		return extract.NewEthExtractor(conf)
+	}
+	return newEthNearHeadSyncer(conf, cache, extractorFactory)
+}
+
+func newEthNearHeadSyncer(conf EthConfig, cache EthCache, extractorFactory EthExtractorFactory) (*EthNearHeadSyncer, error) {
+	// Create nearhead extractor
+	extractConf := conf.Extract
+	extractConf.StartBlockNumber = ethTypes.FinalizedBlockNumber
+	extractConf.TargetBlockNumber = ethTypes.LatestBlockNumber
+	nearHeadExtractor, err := extractorFactory(extractConf)
+	if err != nil {
+		return nil, errors.WithMessage(err, "failed to create near head extractor")
+	}
+
+	return &EthNearHeadSyncer{
+		EthConfig:         conf,
+		cache:             cache,
+		nearHeadExtractor: nearHeadExtractor,
+		health:            health.NewTimedCounter(conf.Health),
+	}, nil
+}
+
+func (s *EthNearHeadSyncer) Run(ctx context.Context, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	dataChan := extract.NewEthMemoryBoundedChannel(s.Extract.MaxMemoryUsageBytes)
+	defer dataChan.Close()
+
+	go s.nearHeadExtractor.Start(ctx, dataChan)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case res := <-dataChan.RChan():
+			if res != nil {
+				s.processNearHead(res)
+			}
+		}
+	}
+}
+
+func (s *EthNearHeadSyncer) processNearHead(result *extract.EthRevertableBlockData) {
+	// Pop cache for reorg
+	if result.ReorgHeight != nil {
+		s.cache.Pop(*result.ReorgHeight)
+		return
+	}
+
+	// Put the block data into cache
+	sizedBlockData := types.NewSized(result.BlockData)
+	for {
+		err := s.cache.Put(&sizedBlockData)
+		recovered, unhealthy, unrecovered, elapsed := s.health.OnError(err)
+		if recovered {
+			logrus.WithField("elapsed", elapsed).Warn("Eth near head syncer recovered")
+		} else if unhealthy {
+			logrus.WithError(err).WithField("elapsed", elapsed).Warn("Eth near head syncer failed to write cache")
+		} else if unrecovered {
+			logrus.WithError(err).WithField("elapsed", elapsed).Warn("Eth near head syncer failed to write cache for a long time")
+		}
+
+		if err != nil {
+			time.Sleep(time.Second)
+		} else {
+			break
+		}
+	}
 }
