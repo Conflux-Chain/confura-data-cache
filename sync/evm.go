@@ -86,8 +86,8 @@ func (s *EthSyncer) Run(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			return
-		case res, ok := <-dataChan.RChan():
-			if ok {
+		case res := <-dataChan.RChan():
+			if res != nil {
 				s.processFinalized(res)
 			}
 		}
@@ -183,8 +183,8 @@ func (s *EthNearHeadSyncer) Run(ctx context.Context, wg *sync.WaitGroup) {
 		select {
 		case <-ctx.Done():
 			return
-		case res, ok := <-dataChan.RChan():
-			if ok {
+		case res := <-dataChan.RChan():
+			if res != nil {
 				s.processNearHead(res)
 			}
 		}
