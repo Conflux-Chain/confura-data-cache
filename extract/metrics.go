@@ -2,7 +2,7 @@ package extract
 
 import (
 	metricsUtil "github.com/Conflux-Chain/go-conflux-util/metrics"
-	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/rcrowley/go-metrics"
 )
 
 var (
@@ -20,7 +20,7 @@ func (m *Metrics) Qps() metrics.Timer {
 
 // Availability returns a percentage for measuring the availability of query requests.
 func (m *Metrics) Availability() metricsUtil.Percentage {
-	return metricsUtil.GetOrRegisterTimeWindowPercentageDefault(0, "extract/%v/query/availability", m.chain)
+	return metricsUtil.GetOrRegisterTimeWindowPercentageDefault("extract/%v/query/availability", m.chain)
 }
 
 // Latency returns a histogram for measuring the latency of query requests.
