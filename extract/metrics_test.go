@@ -9,7 +9,7 @@ import (
 
 func TestMetrics(t *testing.T) {
 	// enable metrics
-	metrics.Enabled = true
+	metrics.Enable()
 
 	// QPS
 	timer := ethMetrics.Qps()
