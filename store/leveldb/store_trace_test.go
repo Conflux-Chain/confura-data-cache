@@ -31,6 +31,12 @@ func TestStoreGetTransactionTraces(t *testing.T) {
 	traces, err = store.GetTransactionTraces(common.HexToHash("0x7773"))
 	assert.Nil(t, err)
 	assert.Nil(t, traces)
+
+	// test trace retrieval by index
+	trace, err := store.GetTrace(common.HexToHash("0x7771"), 0)
+	assert.Nil(t, err)
+	assert.NotNil(t, trace)
+	assert.Equal(t, common.HexToHash("0x7771"), *trace.TransactionHash)
 }
 
 func TestStoreGetBlockTraces(t *testing.T) {

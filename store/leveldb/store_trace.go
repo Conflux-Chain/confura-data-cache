@@ -21,6 +21,20 @@ func (store *Store) writeTraces(batch *leveldb.Batch, blockNumber uint64, traces
 	store.writeJson(batch, store.keyBlockNumber2TracesPool, blockNumberBuf[:], traces)
 }
 
+// GetTrace returns single trace for the given transaction hash at specified index. If not found, returns nil.
+func (store *Store) GetTrace(txHash common.Hash, index uint) (*ethTypes.LocalizedTrace, error) {
+	txTraces, err := store.GetTransactionTraces(txHash)
+	if err != nil {
+		return nil, err
+	}
+
+	if txTraces == nil || int(index) >= len(txTraces) {
+		return nil, nil
+	}
+
+	return &txTraces[index], nil
+}
+
 // GetTransactionTraces returns all transaction traces for the given transaction hash. If not found, returns nil.
 func (store *Store) GetTransactionTraces(txHash common.Hash) ([]ethTypes.LocalizedTrace, error) {
 	blockNumber, txIndex, ok, err := store.getBlockNumberAndIndexByTransactionHash(txHash)

@@ -253,6 +253,16 @@ func (c *EthCache) GetTransactionTraces(txHash common.Hash) []ethTypes.Localized
 	return traces
 }
 
+// GetTrace returns single trace of given transaction at specified index.
+func (c *EthCache) GetTrace(txHash common.Hash, index uint) *ethTypes.LocalizedTrace {
+	traces := c.GetTransactionTraces(txHash)
+	if int(index) >= len(traces) {
+		return nil
+	}
+
+	return &traces[index]
+}
+
 // GetLogsByBlockRange returns logs matching given filter parameters.
 // nil returned when not cached.
 // empty logs returned when not exists.

@@ -16,6 +16,7 @@ service Eth {
 
   rpc GetTransactionTraces (TransactionId) returns (DataResponse);
   rpc GetBlockTraces (BlockId) returns (DataResponse);
+  rpc GetTrace (GetTraceRequest) returns (DataResponse);
 }
 
 message BlockId {
@@ -43,4 +44,9 @@ message TransactionId {
 message GetTransactionByIndexRequest {
   BlockId block_id = 1;
   uint32 tx_index = 2;
+}
+
+message GetTraceRequest {
+  TransactionId transaction_id = 1;
+  uint32 index = 2;
 }
