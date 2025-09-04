@@ -124,3 +124,15 @@ func (c *ClientProto) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[
 
 	return pb.ResponseToLazy[[]ethTypes.LocalizedTrace](resp, err)
 }
+
+func (c *ClientProto) GetTrace(txHash common.Hash, index uint) (types.Lazy[*ethTypes.LocalizedTrace], error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	resp, err := c.inner.GetTrace(ctx, &pb.GetTraceRequest{
+		TransactionId: pb.NewTransactionId(txHash),
+		Index:         uint32(index),
+	})
+
+	return pb.ResponseToLazy[*ethTypes.LocalizedTrace](resp, err)
+}

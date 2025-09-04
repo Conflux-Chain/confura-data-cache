@@ -94,3 +94,12 @@ func (api *Api) GetTransactionTraces(txHash common.Hash) (types.Lazy[[]ethTypes.
 
 	return types.NewLazy(traces)
 }
+
+func (api *Api) GetTrace(txHash common.Hash, index uint) (types.Lazy[*ethTypes.LocalizedTrace], error) {
+	trace, err := api.Store.GetTrace(txHash, index)
+	if err != nil {
+		return types.Lazy[*ethTypes.LocalizedTrace]{}, nil
+	}
+
+	return types.NewLazy(trace)
+}

@@ -67,3 +67,7 @@ func (c *Client) GetTransactionTraces(txHash common.Hash) (types.Lazy[[]ethTypes
 func (c *Client) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
 	return providers.Call[types.Lazy[[]ethTypes.LocalizedTrace]](c, "eth_getBlockTraces", bhon)
 }
+
+func (c *Client) GetTrace(txHash common.Hash, index uint) (types.Lazy[*ethTypes.LocalizedTrace], error) {
+	return providers.Call[types.Lazy[*ethTypes.LocalizedTrace]](c, "eth_getTrace", txHash, index)
+}

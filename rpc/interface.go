@@ -30,6 +30,9 @@ type Interface interface {
 
 	// GetBlockTraces returns all block traces for the given block hash or number. If not found, returns nil.
 	GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error)
+
+	// GetTrace returns single trace for the given transaction hash at specified index. If not found, returns nil.
+	GetTrace(txHash common.Hash, index uint) (types.Lazy[*ethTypes.LocalizedTrace], error)
 }
 
 var NotFoundImpl Interface = notFoundImpl{}
@@ -66,4 +69,8 @@ func (notFoundImpl) GetTransactionTraces(txHash common.Hash) (types.Lazy[[]ethTy
 
 func (notFoundImpl) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
 	return types.Lazy[[]ethTypes.LocalizedTrace]{}, nil
+}
+
+func (notFoundImpl) GetTrace(txHash common.Hash, index uint) (types.Lazy[*ethTypes.LocalizedTrace], error) {
+	return types.Lazy[*ethTypes.LocalizedTrace]{}, nil
 }
