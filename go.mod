@@ -3,13 +3,13 @@ module github.com/Conflux-Chain/confura-data-cache
 go 1.23.0
 
 require (
-	github.com/Conflux-Chain/go-conflux-util v0.5.0
+	github.com/Conflux-Chain/go-conflux-util v0.6.6
 	github.com/DmitriyVTitov/size v1.5.0
 	github.com/ethereum/go-ethereum v1.15.11
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mcuadros/go-defaults v1.2.0
 	github.com/openweb3/go-rpc-provider v0.3.5
-	github.com/openweb3/web3go v0.3.1-0.20250814081736-d2e9f1eefc15
+	github.com/openweb3/web3go v0.3.1-0.20250829090850-d766cbafd209
 	github.com/pkg/errors v0.9.1
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9
 	github.com/sirupsen/logrus v1.9.3
