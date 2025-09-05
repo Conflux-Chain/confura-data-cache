@@ -121,22 +121,53 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData,
 		return EthBlockData{}, errors.Errorf("Cannot find block by number %v", blockNumber)
 	}
 
+	blockTxs := block.Transactions.Transactions()
+
+	// If the block has no transactions, there is no need to query receipts or traces.
+	if len(blockTxs) == 0 {
+		return EthBlockData{
+			Block:    block,
+			Receipts: []*types.Receipt{},
+			Traces:   []types.LocalizedTrace{},
+		}, nil
+	}
+
 	bnoh := types.BlockNumberOrHashWithNumber(bn)
-	receipts, err := client.Eth.BlockReceipts(&bnoh)
+
+	receipts, err := QueryEthBlockReceipts(client, bnoh)
 	if err != nil {
 		return EthBlockData{}, errors.WithMessage(err, "Failed to get block receipts")
 	}
 
-	if receipts == nil {
-		return EthBlockData{}, errors.Errorf("Cannot find receipts by block number %v", blockNumber)
+	// Validate receipts
+	if len(receipts) != len(blockTxs) {
+		return EthBlockData{}, errors.Errorf(
+			"Transaction/receipt count mismatch for block %v: block has %d transactions, but received %d receipts",
+			blockNumber, len(blockTxs), len(receipts),
+		)
+	}
+	for _, rcpt := range receipts {
+		if rcpt.BlockHash != block.Hash {
+			return EthBlockData{}, errors.Errorf(
+				"Receipt block hash mismatch for block %v: receipt has %s, expected %s",
+				blockNumber, rcpt.BlockHash, block.Hash,
+			)
+		}
 	}
 
 	traces, err := QueryEthBlockTraces(client, bnoh)
 	if err != nil && !errors.Is(err, errTraceRpcNotSupported) {
 		return EthBlockData{}, errors.WithMessage(err, "Failed to get block traces")
 	}
-	if err == nil && traces == nil {
-		return EthBlockData{}, errors.Errorf("Cannot find traces by block number %v", blockNumber)
+
+	// Validate traces
+	for i := range traces {
+		if traces[i].BlockHash != block.Hash {
+			return EthBlockData{}, errors.Errorf(
+				"Trace block hash mismatch for block %v: trace references %s, expected %s",
+				blockNumber, traces[i].BlockHash, block.Hash,
+			)
+		}
 	}
 
 	data := EthBlockData{
@@ -152,6 +183,20 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData,
 	return data, nil
 }
 
+func QueryEthBlockReceipts(client *web3go.Client, bnoh types.BlockNumberOrHash) ([]*types.Receipt, error) {
+	receipts, err := client.Eth.BlockReceipts(&bnoh)
+	if err != nil {
+		return nil, err
+	}
+
+	// Some RPC providers return nil if the block is not found instead of an error
+	if receipts == nil {
+		return nil, errors.Errorf("Cannot find receipts by block %v", bnoh)
+	}
+
+	return receipts, nil
+}
+
 func QueryEthBlockTraces(client *web3go.Client, bnoh types.BlockNumberOrHash) ([]types.LocalizedTrace, error) {
 	traceRpcSuppported, confirmed := ethTraceRpcKnownSupported.Load().(bool)
 	if confirmed && !traceRpcSuppported {
@@ -161,6 +206,11 @@ func QueryEthBlockTraces(client *web3go.Client, bnoh types.BlockNumberOrHash) ([
 	traces, err := client.Trace.Blocks(bnoh)
 	if err == nil {
 		ethTraceRpcKnownSupported.Store(true)
+
+		// Some RPC providers return nil if the block is not found instead of an error
+		if traces == nil {
+			return nil, errors.Errorf("Cannot find traces by block %v", bnoh)
+		}
 		return traces, nil
 	}
 
