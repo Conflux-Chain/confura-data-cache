@@ -121,8 +121,10 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData,
 		return EthBlockData{}, errors.Errorf("Cannot find block by number %v", blockNumber)
 	}
 
+	blockTxs := block.Transactions.Transactions()
+
 	// If the block has no transactions, there is no need to query receipts or traces.
-	if len(block.Transactions.Transactions()) == 0 {
+	if len(blockTxs) == 0 {
 		return EthBlockData{
 			Block:    block,
 			Receipts: []*types.Receipt{},
@@ -138,8 +140,11 @@ func QueryEthBlockData(client *web3go.Client, blockNumber uint64) (EthBlockData,
 	}
 
 	// Validate receipts
-	if len(receipts) == 0 {
-		return EthBlockData{}, errors.Errorf("No receipts found for block %v", blockNumber)
+	if len(receipts) != len(blockTxs) {
+		return EthBlockData{}, errors.Errorf(
+			"Transaction/receipt count mismatch for block %v: block has %d transactions, but received %d receipts",
+			blockNumber, len(blockTxs), len(receipts),
+		)
 	}
 	for _, rcpt := range receipts {
 		if rcpt.BlockHash != block.Hash {
