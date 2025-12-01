@@ -1,7 +1,7 @@
 package rpc
 
 import (
-	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
+	"github.com/Conflux-Chain/confura-data-cache/store"
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/ethereum/go-ethereum/common"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -12,13 +12,13 @@ var _ Interface = (*Api)(nil)
 
 // Api is the eth RPC implementation.
 type Api struct {
-	*leveldb.Store
+	store.Store
 
 	blockCache        *lru.Cache[uint64, types.Lazy[*ethTypes.Block]]
 	blockSummaryCache *lru.Cache[uint64, types.Lazy[*ethTypes.Block]]
 }
 
-func NewApi(store *leveldb.Store, lruCacheSize int) *Api {
+func NewApi(store store.Store, lruCacheSize int) *Api {
 	api := Api{Store: store}
 	api.blockCache, _ = lru.New[uint64, types.Lazy[*ethTypes.Block]](lruCacheSize)
 	api.blockSummaryCache, _ = lru.New[uint64, types.Lazy[*ethTypes.Block]](lruCacheSize)

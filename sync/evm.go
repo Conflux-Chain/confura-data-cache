@@ -7,7 +7,7 @@ import (
 
 	"github.com/Conflux-Chain/confura-data-cache/extract"
 	"github.com/Conflux-Chain/confura-data-cache/nearhead"
-	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
+	"github.com/Conflux-Chain/confura-data-cache/store"
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/health"
 	ethTypes "github.com/openweb3/web3go/types"
@@ -17,7 +17,6 @@ import (
 
 var (
 	_ EthExtractor = (*extract.EthExtractor)(nil)
-	_ EthStore     = (*leveldb.Store)(nil)
 	_ EthCache     = (*nearhead.EthCache)(nil)
 )
 
@@ -27,11 +26,6 @@ type EthExtractor interface {
 
 type EthExtractorFactory func(conf extract.EthConfig) (EthExtractor, error)
 
-type EthStore interface {
-	NextBlockNumber() uint64
-	Write(...types.EthBlockData) error
-}
-
 type EthCache interface {
 	Pop(uint64) bool
 	Put(sized *types.Sized[*types.EthBlockData]) error
@@ -39,21 +33,21 @@ type EthCache interface {
 
 type EthSyncer struct {
 	EthConfig
-	store              EthStore
+	store              store.Writable
 	finalizedExtractor EthExtractor
 	lastFlushAt        time.Time
 	writeBuffer        []types.EthBlockData
 	health             *health.TimedCounter
 }
 
-func NewEthSyncer(conf EthConfig, store *leveldb.Store) (*EthSyncer, error) {
+func NewEthSyncer(conf EthConfig, store store.Writable) (*EthSyncer, error) {
 	extractorFactory := func(conf extract.EthConfig) (EthExtractor, error) {
 		return extract.NewEthExtractor(conf)
 	}
 	return newEthSyncer(conf, store, extractorFactory)
 }
 
-func newEthSyncer(conf EthConfig, store EthStore, extractorFactory EthExtractorFactory) (*EthSyncer, error) {
+func newEthSyncer(conf EthConfig, store store.Writable, extractorFactory EthExtractorFactory) (*EthSyncer, error) {
 	// Create finalized extractor
 	extractConf := conf.Extract
 	extractConf.StartBlockNumber = ethTypes.BlockNumber(store.NextBlockNumber())
