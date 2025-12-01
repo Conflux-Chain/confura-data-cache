@@ -24,6 +24,7 @@ var (
 		url       string
 		blockFrom int64
 		numBlocks uint64
+		sharding  uint64
 	}
 
 	validateLeveldbCmd = &cobra.Command{
@@ -37,6 +38,7 @@ func init() {
 	validateLeveldbCmd.Flags().StringVar(&validateLeveldbCmdArgs.url, "url", "http://evm.confluxrpc.com", "Fullnode RPC endpoint")
 	validateLeveldbCmd.Flags().Int64Var(&validateLeveldbCmdArgs.blockFrom, "block-from", -100, "Block number to validate from, negative value means \"finalized\" - N")
 	validateLeveldbCmd.Flags().Uint64Var(&validateLeveldbCmdArgs.numBlocks, "blocks", 10, "Number of blocks to validate")
+	validateLeveldbCmd.Flags().Uint64Var(&validateLeveldbCmdArgs.sharding, "sharding", 0, "Number of blocks to store in a sharding, 0 indicates no sharding")
 
 	rootCmd.AddCommand(validateLeveldbCmd)
 }
@@ -54,12 +56,14 @@ func validateLeveldb(*cobra.Command, []string) {
 	cmd.FatalIfErr(err, "Failed to create tmp dir")
 	defer os.RemoveAll(path)
 
-	config := leveldb.Config{
-		Path:                   path,
-		DefaultNextBlockNumber: blockFrom,
-	}
-	store, err := leveldb.NewStore(config)
-	cmd.FatalIfErr(err, "Failed to create store")
+	// create store
+	store := mustInitStore(leveldb.ShardingConfig{
+		Config: leveldb.Config{
+			Path:                   path,
+			DefaultNextBlockNumber: blockFrom,
+		},
+		ShardingBlocks: validateLeveldbCmdArgs.sharding,
+	})
 	defer store.Close()
 
 	// start rpc and gRPC service

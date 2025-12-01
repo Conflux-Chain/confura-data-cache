@@ -33,7 +33,7 @@ func start(*cobra.Command, []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
-	store := mustInitStore()
+	store := mustInitStoreFromViper()
 	defer store.Close()
 
 	// run sync
@@ -53,18 +53,26 @@ func start(*cobra.Command, []string) {
 	cmd.GracefulShutdown(&wg, cancel)
 }
 
-func mustInitStore() store.Store {
+func mustInitStoreFromViper() store.Store {
 	var config leveldb.ShardingConfig
 	viperUtil.MustUnmarshalKey("store.leveldb", &config)
 
+	return mustInitStore(config)
+}
+
+func mustInitStore(config leveldb.ShardingConfig) store.Store {
+	var (
+		store store.Store
+		err   error
+	)
+
 	if config.ShardingBlocks == 0 {
-		store, err := leveldb.NewStore(config.Config)
-		cmd.FatalIfErr(err, "Failed to create LevelDB database")
-		return store
+		store, err = leveldb.NewStore(config.Config)
+	} else {
+		store, err = leveldb.NewShardingStore(config)
 	}
 
-	store, err := leveldb.NewShardingStore(config)
-	cmd.FatalIfErr(err, "Failed to create sharding LevelDB database")
+	cmd.FatalIfErr(err, "Failed to create store")
 
 	logrus.WithField("config", fmt.Sprintf("%+v", config)).Info("LevelDB database created or opened")
 
