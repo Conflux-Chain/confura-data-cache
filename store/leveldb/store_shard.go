@@ -216,7 +216,7 @@ func (store *ShardingStore) parseShardingEthBlockData(data []types.EthBlockData)
 
 // blockNumber2Shard converts block number to shard id, which starts from 1.
 func (store *ShardingStore) blockNumber2Shard(blockNumber uint64) uint64 {
-	return 1 + blockNumber%store.config.ShardingBlocks
+	return 1 + blockNumber/store.config.ShardingBlocks
 }
 
 func (store *ShardingStore) write(data shardingEthBlockData) error {
