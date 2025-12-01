@@ -11,6 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 	dberrors "github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 var (
@@ -60,13 +61,18 @@ type Store struct {
 //
 // If the DB of specified path is empty and defaultNextBlockNumber specified,
 // store will write data from defaultNextBlockNumber.
-func NewStore(config Config) (*Store, error) {
+func NewStore(config Config, options ...opt.Options) (*Store, error) {
+	var opt *opt.Options
+	if len(options) > 0 {
+		opt = &options[0]
+	}
+
 	// open or create database
-	db, err := leveldb.OpenFile(config.Path, nil)
+	db, err := leveldb.OpenFile(config.Path, opt)
 	if dberrors.IsCorrupted(err) {
 		// try to recover database
 		logrus.WithError(err).WithField("path", config.Path).Warn("Failed to open corrupted file, try to recover")
-		db, err = leveldb.RecoverFile(config.Path, nil)
+		db, err = leveldb.RecoverFile(config.Path, opt)
 		if err != nil {
 			return nil, errors.WithMessagef(err, "Failed to recover file %v", config.Path)
 		}
