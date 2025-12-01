@@ -274,6 +274,10 @@ func (store *ShardingStore) loadOrCreateDataStore(shard uint64) (*Store, error) 
 	// write metadata in index store
 	metadata := store.metadata.Load().(ShardingMetadata)
 	metadata.LatestShard = shard
+	if metadata.EarlistShard == 0 {
+		metadata.EarlistShard = shard
+	}
+
 	jsonMetadata, _ := json.Marshal(metadata)
 	if err = store.indexStore.db.Put(keyShardingMetadata, jsonMetadata, nil); err != nil {
 		return nil, errors.WithMessage(err, "Failed to update metadata in index store")

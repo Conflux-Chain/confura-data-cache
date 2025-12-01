@@ -63,7 +63,7 @@ func (store *Store) readUint64(key []byte) (uint64, bool, error) {
 }
 
 func (store *Store) readJson(key []byte, valPtr any) (bool, error) {
-	value, ok, err := store.readRaw(key, 8)
+	value, ok, err := store.readRaw(key)
 	if err != nil || !ok {
 		return false, err
 	}
