@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	pb "github.com/Conflux-Chain/confura-data-cache/rpc/proto"
-	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
+	"github.com/Conflux-Chain/confura-data-cache/store"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/mcuadros/go-defaults"
 	"github.com/openweb3/go-rpc-provider"
@@ -36,7 +36,7 @@ func DefaultConfig() (config Config) {
 }
 
 // MustServeRPC starts RPC service and wait for graceful shutdown.
-func MustServeRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store *leveldb.Store) {
+func MustServeRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store store.Store) {
 	defer wg.Done()
 
 	listener, err := net.Listen("tcp", config.Endpoint)
@@ -70,7 +70,7 @@ func MustServeRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store 
 }
 
 // MustServeGRPC starts gRPC service and wait for graceful shutdown.
-func MustServeGRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store *leveldb.Store) {
+func MustServeGRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store store.Store) {
 	defer wg.Done()
 
 	listener, err := net.Listen("tcp", config.Proto.Endpoint)

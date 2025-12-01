@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/extract"
-	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
+	"github.com/Conflux-Chain/confura-data-cache/store"
 	"github.com/Conflux-Chain/go-conflux-util/health"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/sirupsen/logrus"
@@ -21,7 +21,7 @@ type EthConfig struct {
 	Health      health.TimedCounterConfig // health configurations
 }
 
-func MustNewEthSyncerFromViper(store *leveldb.Store) *EthSyncer {
+func MustNewEthSyncerFromViper(store store.Writable) *EthSyncer {
 	var conf EthConfig
 	viper.MustUnmarshalKey("sync", &conf)
 

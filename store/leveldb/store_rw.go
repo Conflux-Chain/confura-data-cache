@@ -28,11 +28,8 @@ func (store *Store) writeJson(batch *leveldb.Batch, pool *KeyPool, key []byte, v
 	store.write(batch, pool, key, valueJson)
 }
 
-func (store *Store) read(pool *KeyPool, key []byte, expectedValueSize ...int) ([]byte, bool, error) {
-	prefixedKey := pool.Get(key)
-	defer pool.Put(prefixedKey)
-
-	value, err := store.db.Get(*prefixedKey, nil)
+func (store *Store) readRaw(key []byte, expectedValueSize ...int) ([]byte, bool, error) {
+	value, err := store.db.Get(key, nil)
 	if err == dberrors.ErrNotFound {
 		return nil, false, nil
 	}
@@ -49,32 +46,31 @@ func (store *Store) read(pool *KeyPool, key []byte, expectedValueSize ...int) ([
 	return value, true, nil
 }
 
-// func (store *Store) readJson(pool *KeyPool, key []byte, valuePointer any) (bool, error) {
-// 	value, ok, err := store.read(pool, key)
-// 	if err != nil || !ok {
-// 		return false, err
-// 	}
+func (store *Store) read(pool *KeyPool, key []byte, expectedValueSize ...int) ([]byte, bool, error) {
+	prefixedKey := pool.Get(key)
+	defer pool.Put(prefixedKey)
 
-// 	if err = json.Unmarshal(value, valuePointer); err != nil {
-// 		return false, errors.WithMessage(err, "Failed to unmarshal JSON value to object")
-// 	}
-
-// 	return true, nil
-// }
+	return store.readRaw(*prefixedKey, expectedValueSize...)
+}
 
 func (store *Store) readUint64(key []byte) (uint64, bool, error) {
-	value, err := store.db.Get(key, nil)
-	if err == dberrors.ErrNotFound {
-		return 0, false, nil
-	}
-
-	if err != nil {
+	value, ok, err := store.readRaw(key, 8)
+	if err != nil || !ok {
 		return 0, false, err
 	}
 
-	if len(value) != 8 {
-		return 0, false, errors.Errorf("Invalid value size, expected = 8, actual = %v", len(value))
+	return binary.BigEndian.Uint64(value), true, nil
+}
+
+func (store *Store) readJson(key []byte, valPtr any) (bool, error) {
+	value, ok, err := store.readRaw(key)
+	if err != nil || !ok {
+		return false, err
 	}
 
-	return binary.BigEndian.Uint64(value), true, nil
+	if err = json.Unmarshal(value, valPtr); err != nil {
+		return false, errors.WithMessage(err, "Failed to unmarshal JSON")
+	}
+
+	return true, nil
 }

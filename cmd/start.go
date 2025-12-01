@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/Conflux-Chain/confura-data-cache/rpc"
+	"github.com/Conflux-Chain/confura-data-cache/store"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	dataSync "github.com/Conflux-Chain/confura-data-cache/sync"
 	"github.com/Conflux-Chain/go-conflux-util/cmd"
@@ -32,15 +33,8 @@ func start(*cobra.Command, []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
-	// create or open leveldb database
-	var storeConfig leveldb.Config
-	viperUtil.MustUnmarshalKey("store.leveldb", &storeConfig)
-	store, err := leveldb.NewStore(storeConfig)
-	if err != nil {
-		logrus.WithError(err).WithField("config", storeConfig).Fatal("Failed to create LevelDB database")
-	}
+	store := mustInitStoreFromViper()
 	defer store.Close()
-	logrus.WithField("config", fmt.Sprintf("%+v", storeConfig)).Info("LevelDB database created or opened")
 
 	// run sync
 	syncer := dataSync.MustNewEthSyncerFromViper(store)
@@ -57,4 +51,30 @@ func start(*cobra.Command, []string) {
 
 	// wait for terminate signal to shutdown gracefully
 	cmd.GracefulShutdown(&wg, cancel)
+}
+
+func mustInitStoreFromViper() store.Store {
+	var config leveldb.ShardingConfig
+	viperUtil.MustUnmarshalKey("store.leveldb", &config)
+
+	return mustInitStore(config)
+}
+
+func mustInitStore(config leveldb.ShardingConfig) store.Store {
+	var (
+		store store.Store
+		err   error
+	)
+
+	if config.ShardingBlocks == 0 {
+		store, err = leveldb.NewStore(config.Config)
+	} else {
+		store, err = leveldb.NewShardingStore(config)
+	}
+
+	cmd.FatalIfErr(err, "Failed to create store")
+
+	logrus.WithField("config", fmt.Sprintf("%+v", config)).Info("LevelDB database created or opened")
+
+	return store
 }
