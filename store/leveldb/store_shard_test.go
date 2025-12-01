@@ -1,12 +1,15 @@
 package leveldb
 
 import (
+	"bytes"
 	"math/big"
 	"os"
 	"testing"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -34,6 +37,24 @@ func createTestshardingStore(t *testing.T, defaultNextBlockNumber ...uint64) (*S
 		store.Close()
 		os.RemoveAll(path)
 	}
+}
+
+func TestShardingConfig(t *testing.T) {
+	defer viper.Reset()
+
+	viper.SetConfigType("yml")
+	viper.ReadConfig(bytes.NewBufferString(`
+store:
+  leveldb:
+    path: db6
+    shardingBlocks: 66
+`))
+
+	var config ShardingConfig
+	viperUtil.MustUnmarshalKey("store.leveldb", &config)
+
+	assert.Equal(t, "db6", config.Path)
+	assert.Equal(t, uint64(66), config.ShardingBlocks)
 }
 
 func TestShardingStoreWrite(t *testing.T) {

@@ -5,7 +5,9 @@
 # store:
 #   leveldb:
 #     path: db
-#     DefaultNextBlockNumber: 0
+#     defaultNextBlockNumber: 0
+#     # Set positive number to enable sharding
+#     shardingBlocks: 0
 
 # RPC configurations
 # rpc:
