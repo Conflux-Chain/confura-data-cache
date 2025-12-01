@@ -34,4 +34,6 @@ type Readable interface {
 type Store interface {
 	Writable
 	Readable
+
+	Close() error
 }

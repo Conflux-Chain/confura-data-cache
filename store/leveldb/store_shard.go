@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/ethereum/go-ethereum/common"
+	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -287,4 +289,132 @@ func (store *ShardingStore) loadOrCreateDataStore(shard uint64) (*Store, error) 
 	}).Info("New data store created")
 
 	return dataStore, nil
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+//
+// Readable interface implementations
+//
+///////////////////////////////////////////////////////////////////////////////////////
+
+func (store *ShardingStore) getDataStoreByHash(hash common.Hash) (*Store, bool, error) {
+	shard, ok, err := store.indexStore.readUint64(hash.Bytes())
+	if err != nil {
+		return nil, false, errors.WithMessage(err, "Failed to get shard by hash from index store")
+	}
+
+	if !ok {
+		return nil, false, nil
+	}
+
+	if val, ok := store.dataStores.Load(shard); ok {
+		return val.(*Store), true, nil
+	}
+
+	return nil, false, nil
+}
+
+func (store *ShardingStore) getDataStore(bhon types.BlockHashOrNumber) (*Store, bool, error) {
+	hash, ok, number := bhon.HashOrNumber()
+	if ok {
+		return store.getDataStoreByHash(hash)
+	}
+
+	shard := store.blockNumber2Shard(number)
+
+	if val, ok := store.dataStores.Load(shard); ok {
+		return val.(*Store), true, nil
+	}
+
+	return nil, false, nil
+}
+
+func (store *ShardingStore) GetBlockNumber(bhon types.BlockHashOrNumber) (uint64, bool, error) {
+	dataStore, ok, err := store.getDataStore(bhon)
+	if err != nil || !ok {
+		return 0, false, err
+	}
+
+	return dataStore.GetBlockNumber(bhon)
+}
+
+func (store *ShardingStore) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[*ethTypes.Block], error) {
+	dataStore, ok, err := store.getDataStore(bhon)
+	if err != nil || !ok {
+		return types.Lazy[*ethTypes.Block]{}, err
+	}
+
+	return dataStore.GetBlock(bhon, isFull)
+}
+
+func (store *ShardingStore) GetBlockTransactionCount(bhon types.BlockHashOrNumber) (int64, error) {
+	dataStore, ok, err := store.getDataStore(bhon)
+	if err != nil || !ok {
+		return -1, err
+	}
+
+	return dataStore.GetBlockTransactionCount(bhon)
+}
+
+func (store *ShardingStore) GetTransactionByHash(txHash common.Hash) (*ethTypes.TransactionDetail, error) {
+	dataStore, ok, err := store.getDataStoreByHash(txHash)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	return dataStore.GetTransactionByHash(txHash)
+}
+
+func (store *ShardingStore) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex uint32) (*ethTypes.TransactionDetail, error) {
+	dataStore, ok, err := store.getDataStore(bhon)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	return dataStore.GetTransactionByIndex(bhon, txIndex)
+}
+
+func (store *ShardingStore) GetTransactionReceipt(txHash common.Hash) (*ethTypes.Receipt, error) {
+	dataStore, ok, err := store.getDataStoreByHash(txHash)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	return dataStore.GetTransactionReceipt(txHash)
+}
+
+func (store *ShardingStore) GetBlockReceipts(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.Receipt], error) {
+	dataStore, ok, err := store.getDataStore(bhon)
+	if err != nil || !ok {
+		return types.Lazy[[]ethTypes.Receipt]{}, err
+	}
+
+	return dataStore.GetBlockReceipts(bhon)
+}
+
+func (store *ShardingStore) GetTrace(txHash common.Hash, index uint) (*ethTypes.LocalizedTrace, error) {
+	dataStore, ok, err := store.getDataStoreByHash(txHash)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	return dataStore.GetTrace(txHash, index)
+}
+
+func (store *ShardingStore) GetTransactionTraces(txHash common.Hash) ([]ethTypes.LocalizedTrace, error) {
+	dataStore, ok, err := store.getDataStoreByHash(txHash)
+	if err != nil || !ok {
+		return nil, err
+	}
+
+	return dataStore.GetTransactionTraces(txHash)
+}
+
+func (store *ShardingStore) GetBlockTraces(bhon types.BlockHashOrNumber) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
+	dataStore, ok, err := store.getDataStore(bhon)
+	if err != nil || !ok {
+		return types.Lazy[[]ethTypes.LocalizedTrace]{}, err
+	}
+
+	return dataStore.GetBlockTraces(bhon)
 }
