@@ -29,11 +29,21 @@ func (store *Store) writeBlock(batch *leveldb.Batch, data types.EthBlockData) {
 	store.write(batch, store.keyBlockNumber2TxCountPool, blockNumberBuf[:], txCountBuf[:])
 }
 
+func (store *Store) isBlockNumberInRange(bn uint64) bool {
+	earlist, ok := store.EarlistBlockNumber()
+
+	return ok && bn >= earlist && bn < store.NextBlockNumber()
+}
+
 // GetBlockNumber returns block number for the given block hash or number if any.
 func (store *Store) GetBlockNumber(bhon types.BlockHashOrNumber) (uint64, bool, error) {
 	hash, ok, number := bhon.HashOrNumber()
 	if !ok {
-		return number, true, nil
+		if store.isBlockNumberInRange(number) {
+			return number, true, nil
+		}
+
+		return 0, false, nil
 	}
 
 	value, ok, err := store.read(store.keyBlockHash2NumberPool, hash.Bytes(), 8)
@@ -45,7 +55,13 @@ func (store *Store) GetBlockNumber(bhon types.BlockHashOrNumber) (uint64, bool, 
 		return 0, false, nil
 	}
 
-	return binary.BigEndian.Uint64(value), true, nil
+	number = binary.BigEndian.Uint64(value)
+
+	if store.isBlockNumberInRange(number) {
+		return number, true, nil
+	}
+
+	return 0, false, nil
 }
 
 // GetBlock returns block for the given block hash or number. If not found, returns nil.
