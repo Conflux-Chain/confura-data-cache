@@ -9,7 +9,7 @@ import (
 )
 
 type BatchWriteOption struct {
-	WriteOption
+	WriteOption `mapstructure:",squash"`
 
 	BatchSize    int           `default:"100"`
 	BatchTimeout time.Duration `default:"3s"`

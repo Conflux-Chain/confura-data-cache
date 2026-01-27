@@ -40,3 +40,54 @@
 #   health:
 #     threshold: 1m
 #     remind: 5m
+
+# Synchronization configurations - v2
+# sync:
+#   catchUp:
+#     adapter:
+#       # For the first time, it's better to configure a nginx URL with multiple RPC nodes behind.
+#       # Once catched up to the latest finalized block, set empty URL to disable catchup mode
+#       # if nginx removed and service restarted.
+#       url: http://evm.confluxrpc.com
+#       option:
+#         requestTimeout: 3s
+#         ignoreReceipts: false
+#         ignoreTraces: false
+#     poller:
+#       parallel:
+#         serialOption:
+#           routines: 0
+#           # Better to set n x number of RPC nodes, 0 indicates unlimited
+#           window: 0
+#         retryInterval: 1s
+#         health:
+#           threshold: 1m
+#           remind: 5m
+#       buffer:
+#         capacity: 1024
+#         maxBytes: 256000000 # 256M
+#     writer:
+#       retryInterval: 3s
+#       health:
+#         threshold: 1m
+#         remind: 5m
+#       batchSize: 100
+#       batchTimeout: 3s
+#   adapter:
+#     url: http://evm.confluxrpc.com
+#     option:
+#       requestTimeout: 3s
+#       ignoreReceipts: false
+#       ignoreTraces: false
+#   poller:
+#     idleInterval: 1s
+#     retryInterval: 5s
+#     bufferSize: 32
+#     health:
+#       threshold: 1m
+#       remind: 5m
+#   writer:
+#     retryInterval: 3s
+#     health:
+#       threshold: 1m
+#       remind: 5m

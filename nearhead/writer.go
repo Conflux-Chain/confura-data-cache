@@ -11,19 +11,19 @@ import (
 )
 
 type WriteOption struct {
-	Health health.CounterConfig
+	Health health.TimedCounterConfig
 }
 
 // Writer is used in poll-and-process model.
 type Writer struct {
 	cache  *EthCache
-	health *health.Counter
+	health *health.TimedCounter
 }
 
 func NewWriter(cache *EthCache, option WriteOption) *Writer {
 	return &Writer{
 		cache:  cache,
-		health: health.NewCounter(option.Health),
+		health: health.NewTimedCounter(option.Health),
 	}
 }
 
