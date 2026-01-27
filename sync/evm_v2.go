@@ -11,6 +11,7 @@ import (
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/process"
 	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type CatchUpConfig struct {
@@ -41,22 +42,24 @@ type Worker struct {
 }
 
 func NewWorker(config Config, store store.Writable) (*Worker, error) {
-	catchUpAdapter, err := evm.NewAdapterWithConfig(config.CatchUp.Adapter)
-	if err != nil {
-		return nil, errors.WithMessage(err, "Failed to create catch-up EVM adapter")
+	worker := &Worker{
+		config: config,
+		store:  store,
 	}
 
-	adapter, err := evm.NewAdapterWithConfig(config.Adapter)
-	if err != nil {
+	var err error
+
+	if worker.adapter, err = evm.NewAdapterWithConfig(config.Adapter); err != nil {
 		return nil, errors.WithMessage(err, "Failed to create EVM adapter for normal sync")
 	}
 
-	return &Worker{
-		config:         config,
-		store:          store,
-		catchUpAdapter: catchUpAdapter,
-		adapter:        adapter,
-	}, nil
+	if len(config.CatchUp.Adapter.URL) > 0 {
+		if worker.catchUpAdapter, err = evm.NewAdapterWithConfig(config.CatchUp.Adapter); err != nil {
+			return nil, errors.WithMessage(err, "Failed to create catch-up EVM adapter")
+		}
+	}
+
+	return worker, nil
 }
 
 func (worker *Worker) Run(ctx context.Context, wg *sync.WaitGroup) {
@@ -72,6 +75,8 @@ func (worker *Worker) Run(ctx context.Context, wg *sync.WaitGroup) {
 
 	// continue to sync against the latest finalized block
 	nextBlockNumber := worker.store.NextBlockNumber()
+	logrus.WithField("next", nextBlockNumber).Info("Start to sync data")
+
 	poller := poll.NewFinalizedPoller(worker.adapter, nextBlockNumber, worker.config.Poller)
 	wg.Add(1)
 	go poller.Poll(ctx, wg)
@@ -82,9 +87,15 @@ func (worker *Worker) Run(ctx context.Context, wg *sync.WaitGroup) {
 }
 
 func (worker *Worker) catchUp(ctx context.Context) {
-	var wg sync.WaitGroup
+	if worker.catchUpAdapter == nil {
+		logrus.Info("Skip catch up mode due to node URL not specified")
+		return
+	}
 
 	nextBlockNumber := worker.store.NextBlockNumber()
+	logrus.WithField("next", nextBlockNumber).Info("Start to sync data in catch up mode")
+
+	var wg sync.WaitGroup
 
 	poller := poll.NewCatchUpPoller(worker.catchUpAdapter, nextBlockNumber, worker.config.CatchUp.Poller)
 	wg.Add(1)
@@ -95,6 +106,8 @@ func (worker *Worker) catchUp(ctx context.Context) {
 	go process.Process(ctx, &wg, poller.DataCh(), writer)
 
 	wg.Wait()
+
+	logrus.WithField("next", poller.NextBlockNumber()).Info("Complete to sync data in catch up mode")
 }
 
 // StartNearHead starts to sync the near head data in a separate goroutine.

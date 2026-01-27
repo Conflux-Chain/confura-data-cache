@@ -18,7 +18,7 @@ var startV2Cmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(startCmd)
+	rootCmd.AddCommand(startV2Cmd)
 }
 
 func startv2(*cobra.Command, []string) {

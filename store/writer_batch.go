@@ -6,6 +6,7 @@ import (
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
+	"github.com/sirupsen/logrus"
 )
 
 type BatchWriteOption struct {
@@ -53,6 +54,12 @@ func (writer *BatchWriter) Close(ctx context.Context) {
 
 func (writer *BatchWriter) write(ctx context.Context) {
 	if writer.inner.write(ctx, writer.buf...) {
+		logrus.WithFields(logrus.Fields{
+			"blocks":   len(writer.buf),
+			"interval": time.Since(writer.lastBatchTime),
+			"latest":   writer.buf[len(writer.buf)-1].Block.Number,
+		}).Debug("Succeeded to write block data in batch")
+
 		writer.buf = writer.buf[:0]
 		writer.lastBatchTime = time.Now()
 	}

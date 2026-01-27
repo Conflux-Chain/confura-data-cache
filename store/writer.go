@@ -8,6 +8,7 @@ import (
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/Conflux-Chain/go-conflux-util/health"
+	"github.com/sirupsen/logrus"
 )
 
 type WriteOption struct {
@@ -34,6 +35,8 @@ func NewWriter(store Writable, option WriteOption) *Writer {
 // Process implements process.Processor[evm.BlockData] interface.
 func (writer *Writer) Process(ctx context.Context, data evm.BlockData) {
 	writer.write(ctx, types.EthBlockData(data))
+
+	logrus.WithField("block", data.Block.Number).Debug("Succeeded to write block data")
 }
 
 // Process implements process.Processor[evm.BlockData] interface.
