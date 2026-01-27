@@ -16,6 +16,7 @@ type WriteOption struct {
 	Health health.CounterConfig
 }
 
+// Writer is used in poll-and-process model.
 type Writer struct {
 	option WriteOption
 	store  Writable

@@ -11,10 +11,11 @@ import (
 type BatchWriteOption struct {
 	WriteOption
 
-	BatchSize    int           `default:"10"`
+	BatchSize    int           `default:"100"`
 	BatchTimeout time.Duration `default:"3s"`
 }
 
+// BatchWriter is used in poll-and-process model.
 type BatchWriter struct {
 	option BatchWriteOption
 
@@ -52,7 +53,7 @@ func (writer *BatchWriter) Close(ctx context.Context) {
 
 func (writer *BatchWriter) write(ctx context.Context) {
 	if writer.inner.write(ctx, writer.buf...) {
-		writer.lastBatchTime = time.Now()
 		writer.buf = writer.buf[:0]
+		writer.lastBatchTime = time.Now()
 	}
 }

@@ -6,34 +6,42 @@ import (
 	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll"
+	"github.com/Conflux-Chain/go-conflux-util/health"
 	"github.com/sirupsen/logrus"
 )
 
-type Writer struct {
-	cache *EthCache
+type WriteOption struct {
+	Health health.CounterConfig
 }
 
-func NewWriter(cache *EthCache) *Writer {
+// Writer is used in poll-and-process model.
+type Writer struct {
+	cache  *EthCache
+	health *health.Counter
+}
+
+func NewWriter(cache *EthCache, option WriteOption) *Writer {
 	return &Writer{
-		cache: cache,
+		cache:  cache,
+		health: health.NewCounter(option.Health),
 	}
 }
 
-// Process implements process.Processor[poll.evm.BlockData[evm.BlockData]] interface.
+// Process implements process.Processor[poll.Revertable[evm.BlockData]] interface.
 func (writer *Writer) Process(ctx context.Context, data poll.Revertable[evm.BlockData]) {
+	blockNumber := data.Data.Block.Number.Uint64()
+
 	if data.Reverted {
-		blockNumber := data.Data.Block.Number.Uint64()
 		popped := writer.cache.Pop(blockNumber)
-		logrus.WithField("popped", popped).Info("Pop blockchain data from near head cache")
+		logrus.WithField("blocks", popped).Info("Near head cache popped")
 	}
 
 	convertedData := types.EthBlockData(data.Data)
 	sizedData := types.NewSized(&convertedData)
 
-	if err := writer.cache.Put(&sizedData); err != nil {
-		// poll-process model should guarantee the block number sequence
-		logrus.WithError(err).Fatal("Failed to write near head cache")
-	}
+	err := writer.cache.Put(&sizedData)
+
+	writer.health.LogOnError(err, "Write near head cache")
 }
 
 // Process implements process.Processor[evm.BlockData] interface.
