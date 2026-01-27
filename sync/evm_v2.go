@@ -9,6 +9,7 @@ import (
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/process"
+	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/pkg/errors"
 )
 
@@ -19,6 +20,8 @@ type CatchUpConfig struct {
 }
 
 type Config struct {
+	CatchUp CatchUpConfig
+
 	Adapter evm.AdapterConfig
 	Poller  poll.Option
 	Writer  store.WriteOption
@@ -30,44 +33,68 @@ type NearHeadConfig struct {
 	Writer  nearhead.WriteOption
 }
 
-// CatchUp sync data into database till the latest finalized block. Note, this is a time consuming operation, e.g. several days or weeks.
-func CatchUp(ctx context.Context, config CatchUpConfig, writable store.Writable) error {
-	adapter, err := evm.NewAdapterWithConfig(config.Adapter)
+type Worker struct {
+	config         Config
+	store          store.Writable
+	catchUpAdapter *evm.Adapter
+	adapter        *evm.Adapter
+}
+
+func NewWorker(config Config, store store.Writable) (*Worker, error) {
+	catchUpAdapter, err := evm.NewAdapterWithConfig(config.CatchUp.Adapter)
 	if err != nil {
-		return errors.WithMessage(err, "Failed to create EVM adapter")
+		return nil, errors.WithMessage(err, "Failed to create catch-up EVM adapter")
 	}
 
+	adapter, err := evm.NewAdapterWithConfig(config.Adapter)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to create EVM adapter for normal sync")
+	}
+
+	return &Worker{
+		config:         config,
+		store:          store,
+		catchUpAdapter: catchUpAdapter,
+		adapter:        adapter,
+	}, nil
+}
+
+func (worker *Worker) Run(ctx context.Context, wg *sync.WaitGroup) {
+	wg.Done()
+
+	// catch up to the latest finalized at first
+	worker.catchUp(ctx)
+
+	// terminate data sync if interrupted
+	if ctxutil.IsDone(ctx) {
+		return
+	}
+
+	// continue to sync against the latest finalized block
+	nextBlockNumber := worker.store.NextBlockNumber()
+	poller := poll.NewFinalizedPoller(worker.adapter, nextBlockNumber, worker.config.Poller)
+	wg.Add(1)
+	go poller.Poll(ctx, wg)
+
+	writer := store.NewWriter(worker.store, worker.config.Writer)
+	wg.Add(1)
+	go process.Process(ctx, wg, poller.DataCh(), writer)
+}
+
+func (worker *Worker) catchUp(ctx context.Context) {
 	var wg sync.WaitGroup
 
-	poller := poll.NewCatchUpPoller(adapter, writable.NextBlockNumber(), config.Poller)
+	nextBlockNumber := worker.store.NextBlockNumber()
+
+	poller := poll.NewCatchUpPoller(worker.catchUpAdapter, nextBlockNumber, worker.config.CatchUp.Poller)
 	wg.Add(1)
 	go poller.Poll(ctx, &wg)
 
-	writer := store.NewBatchWriter(writable, config.Writer)
+	writer := store.NewBatchWriter(worker.store, worker.config.CatchUp.Writer)
 	wg.Add(1)
 	go process.Process(ctx, &wg, poller.DataCh(), writer)
 
 	wg.Wait()
-
-	return nil
-}
-
-// Start starts to sync data against the finalized block in a separate goroutine.
-func Start(ctx context.Context, wg *sync.WaitGroup, config Config, writable store.Writable) error {
-	adapter, err := evm.NewAdapterWithConfig(config.Adapter)
-	if err != nil {
-		return errors.WithMessage(err, "Failed to create EVM adapter")
-	}
-
-	poller := poll.NewFinalizedPoller(adapter, writable.NextBlockNumber(), config.Poller)
-	wg.Add(1)
-	go poller.Poll(ctx, wg)
-
-	writer := store.NewWriter(writable, config.Writer)
-	wg.Add(1)
-	go process.Process(ctx, wg, poller.DataCh(), writer)
-
-	return nil
 }
 
 // StartNearHead starts to sync the near head data in a separate goroutine.
@@ -87,8 +114,9 @@ func StartNearHead(ctx context.Context, wg *sync.WaitGroup, config NearHeadConfi
 	wg.Add(1)
 	go poller.Poll(ctx, wg)
 
+	writer := nearhead.NewWriter(cache, config.Writer)
 	wg.Add(1)
-	go process.Process(ctx, wg, poller.DataCh(), nearhead.NewWriter(cache, config.Writer))
+	go process.Process(ctx, wg, poller.DataCh(), writer)
 
 	return nil
 }
