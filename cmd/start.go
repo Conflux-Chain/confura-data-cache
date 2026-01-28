@@ -38,16 +38,11 @@ func start(*cobra.Command, []string) {
 
 	// run sync
 	syncer := dataSync.MustNewEthSyncerFromViper(store)
-
 	wg.Add(1)
 	go syncer.Run(ctx, &wg)
 
 	// serve RPC
-	var rpcConfig rpc.Config
-	viperUtil.MustUnmarshalKey("rpc", &rpcConfig)
-	wg.Add(2)
-	go rpc.MustServeRPC(ctx, &wg, rpcConfig, store)
-	go rpc.MustServeGRPC(ctx, &wg, rpcConfig, store)
+	mustStartRPC(ctx, &wg, store)
 
 	// wait for terminate signal to shutdown gracefully
 	cmd.GracefulShutdown(&wg, cancel)
@@ -77,4 +72,13 @@ func mustInitStore(config leveldb.ShardingConfig) store.Store {
 	logrus.WithField("config", fmt.Sprintf("%+v", config)).Info("LevelDB database created or opened")
 
 	return store
+}
+
+func mustStartRPC(ctx context.Context, wg *sync.WaitGroup, store store.Store) {
+	var config rpc.Config
+	viperUtil.MustUnmarshalKey("rpc", &config)
+
+	wg.Add(2)
+	go rpc.MustServeRPC(ctx, wg, config, store)
+	go rpc.MustServeGRPC(ctx, wg, config, store)
 }

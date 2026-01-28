@@ -62,9 +62,9 @@ type MockCache struct {
 	mock.Mock
 }
 
-func (m *MockCache) Pop(height uint64) bool {
+func (m *MockCache) Pop(height uint64) int {
 	args := m.Called(height)
-	return args.Bool(0)
+	return args.Int(0)
 }
 
 func (m *MockCache) Put(data *types.Sized[*types.EthBlockData]) error {
@@ -319,7 +319,7 @@ func TestEthNearHeadSyncerProcessNearHead(t *testing.T) {
 
 	t.Run("Pop", func(t *testing.T) {
 		cache := new(MockCache)
-		cache.On("Pop", uint64(123)).Return(true)
+		cache.On("Pop", uint64(123)).Return(5)
 
 		syncer := &EthNearHeadSyncer{
 			cache:  cache,

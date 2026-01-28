@@ -184,29 +184,29 @@ func TestEthCache_Pop(t *testing.T) {
 	assert.Less(t, cache.currentSize, cache.config.MaxMemory)
 
 	// pop one block that not exists
-	ok := cache.Pop(uint64(120177555 + batchBlocks))
-	assert.False(t, ok)
+	popped := cache.Pop(uint64(120177555 + batchBlocks))
+	assert.Equal(t, 0, popped)
 	assert.Equal(t, cache.start, uint64(120177555))
 	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
 	assert.Greater(t, cache.currentSize, uint64(0))
 
 	// pop one block
-	ok = cache.Pop(uint64(120177555 + batchBlocks - 1))
-	assert.True(t, ok)
+	popped = cache.Pop(uint64(120177555 + batchBlocks - 1))
+	assert.Equal(t, 1, popped)
 	assert.Equal(t, cache.start, uint64(120177555))
 	assert.Equal(t, cache.end, uint64(120177555+batchBlocks-1))
 	assert.Greater(t, cache.currentSize, uint64(0))
 
 	// pop two blocks
-	ok = cache.Pop(uint64(120177555 + batchBlocks - 3))
-	assert.True(t, ok)
+	popped = cache.Pop(uint64(120177555 + batchBlocks - 3))
+	assert.Equal(t, 2, popped)
 	assert.Equal(t, cache.start, uint64(120177555))
 	assert.Equal(t, cache.end, uint64(120177555+batchBlocks-3))
 	assert.Greater(t, cache.currentSize, uint64(0))
 
 	// pop all
-	ok = cache.Pop(120177555)
-	assert.True(t, ok)
+	popped = cache.Pop(120177555)
+	assert.Equal(t, 7, popped)
 	assert.Equal(t, cache.start, uint64(120177555))
 	assert.Equal(t, cache.end, uint64(120177555))
 	assert.Equal(t, cache.currentSize, uint64(0))

@@ -27,7 +27,7 @@ type EthExtractor interface {
 type EthExtractorFactory func(conf extract.EthConfig) (EthExtractor, error)
 
 type EthCache interface {
-	Pop(uint64) bool
+	Pop(uint64) int
 	Put(sized *types.Sized[*types.EthBlockData]) error
 }
 
