@@ -49,16 +49,14 @@
 #       # Once catched up to the latest finalized block, set empty URL to disable catchup mode
 #       # if nginx removed and service restarted.
 #       url: http://evm.confluxrpc.com
-#       option:
-#         requestTimeout: 3s
-#         ignoreReceipts: false
-#         ignoreTraces: false
+#       requestTimeout: 3s
+#       ignoreReceipts: false
+#       ignoreTraces: false
 #     poller:
 #       parallel:
-#         serialOption:
-#           routines: 0
-#           # Better to set n x number of RPC nodes, 0 indicates unlimited
-#           window: 0
+#         routines: 0
+#         # Better to set n x number of RPC nodes, 0 indicates unlimited
+#         window: 0
 #         retryInterval: 1s
 #         health:
 #           threshold: 1m
@@ -75,10 +73,9 @@
 #       batchTimeout: 3s
 #   adapter:
 #     url: http://evm.confluxrpc.com
-#     option:
-#       requestTimeout: 3s
-#       ignoreReceipts: false
-#       ignoreTraces: false
+#     requestTimeout: 3s
+#     ignoreReceipts: false
+#     ignoreTraces: false
 #   poller:
 #     idleInterval: 1s
 #     retryInterval: 5s

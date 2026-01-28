@@ -14,21 +14,21 @@ import (
 type WriteOption struct {
 	RetryInterval time.Duration `default:"3s"`
 
-	Health health.CounterConfig
+	Health health.TimedCounterConfig
 }
 
 // Writer is used in poll-and-process model.
 type Writer struct {
 	option WriteOption
 	store  Writable
-	health *health.Counter
+	health *health.TimedCounter
 }
 
 func NewWriter(store Writable, option WriteOption) *Writer {
 	return &Writer{
 		option: option,
 		store:  store,
-		health: health.NewCounter(option.Health),
+		health: health.NewTimedCounter(option.Health),
 	}
 }
 
