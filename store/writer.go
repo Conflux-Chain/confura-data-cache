@@ -34,14 +34,9 @@ func NewWriter(store Writable, option WriteOption) *Writer {
 
 // Process implements process.Processor[evm.BlockData] interface.
 func (writer *Writer) Process(ctx context.Context, data evm.BlockData) {
-	writer.write(ctx, types.EthBlockData(data))
-
-	logrus.WithField("block", data.Block.Number).Debug("Succeeded to write block data")
-}
-
-// Process implements process.Processor[evm.BlockData] interface.
-func (writer *Writer) Close(ctx context.Context) {
-	// do nothing
+	if writer.write(ctx, types.EthBlockData(data)) {
+		logrus.WithField("block", data.Block.Number).Debug("Succeeded to write block data")
+	}
 }
 
 func (writer *Writer) write(ctx context.Context, data ...types.EthBlockData) bool {

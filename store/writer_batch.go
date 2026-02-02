@@ -35,7 +35,7 @@ func NewBatchWriter(store Writable, option BatchWriteOption) *BatchWriter {
 	}
 }
 
-// Process implements process.Processor[evm.BlockData] interface.
+// Process implements process.CatchUpProcessor[evm.BlockData] interface.
 func (writer *BatchWriter) Process(ctx context.Context, data evm.BlockData) {
 	writer.buf = append(writer.buf, types.EthBlockData(data))
 
@@ -45,8 +45,8 @@ func (writer *BatchWriter) Process(ctx context.Context, data evm.BlockData) {
 	}
 }
 
-// Process implements process.Processor[evm.BlockData] interface.
-func (writer *BatchWriter) Close(ctx context.Context) {
+// Process implements process.CatchUpProcessor[evm.BlockData] interface.
+func (writer *BatchWriter) OnCatchedUp(ctx context.Context) {
 	if len(writer.buf) > 0 {
 		writer.write(ctx)
 	}

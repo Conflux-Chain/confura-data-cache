@@ -103,7 +103,7 @@ func (worker *Worker) catchUp(ctx context.Context) {
 
 	writer := store.NewBatchWriter(worker.store, worker.config.CatchUp.Writer)
 	wg.Add(1)
-	go process.Process(ctx, &wg, poller.DataCh(), writer)
+	go process.ProcessCatchUp(ctx, &wg, poller.DataCh(), writer)
 
 	wg.Wait()
 

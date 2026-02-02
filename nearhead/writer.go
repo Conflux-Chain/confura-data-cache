@@ -43,8 +43,3 @@ func (writer *Writer) Process(ctx context.Context, data poll.Revertable[evm.Bloc
 
 	writer.health.LogOnError(err, "Write near head cache")
 }
-
-// Process implements process.Processor[evm.BlockData] interface.
-func (writer *Writer) Close(ctx context.Context) {
-	// do nothing
-}
