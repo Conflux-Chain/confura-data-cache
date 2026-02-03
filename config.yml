@@ -22,27 +22,6 @@
 
 # Synchronization configurations
 # sync:
-#   # Persistence configurations
-#   persistence:
-#     # Batch write size
-#     batchSize: 10
-#     # Batch write interval
-#     batchInterval: 5s
-#   # Extractor configurations
-#   extract:
-#     rpcEndpoint:
-#     maxMemoryUsageBytes: 268435456
-#     pollInterval: 1s
-#     serialOption:
-#       routines:
-#       window:
-#   # Health configurations
-#   health:
-#     threshold: 1m
-#     remind: 5m
-
-# Synchronization configurations - v2
-# sync:
 #   catchUp:
 #     adapter:
 #       # For the first time, it's better to configure a nginx URL with multiple RPC nodes behind.
