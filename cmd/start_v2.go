@@ -2,12 +2,16 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
+	"github.com/Conflux-Chain/confura-data-cache/rpc"
 	"github.com/Conflux-Chain/confura-data-cache/store"
+	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	dataSync "github.com/Conflux-Chain/confura-data-cache/sync"
 	"github.com/Conflux-Chain/go-conflux-util/cmd"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -39,6 +43,32 @@ func startv2(*cobra.Command, []string) {
 	cmd.GracefulShutdown(&wg, cancel)
 }
 
+func mustInitStoreFromViper() store.Store {
+	var config leveldb.ShardingConfig
+	viper.MustUnmarshalKey("store.leveldb", &config)
+
+	return mustInitStore(config)
+}
+
+func mustInitStore(config leveldb.ShardingConfig) store.Store {
+	var (
+		store store.Store
+		err   error
+	)
+
+	if config.ShardingBlocks == 0 {
+		store, err = leveldb.NewStore(config.Config)
+	} else {
+		store, err = leveldb.NewShardingStore(config)
+	}
+
+	cmd.FatalIfErr(err, "Failed to create store")
+
+	logrus.WithField("config", fmt.Sprintf("%+v", config)).Info("LevelDB database created or opened")
+
+	return store
+}
+
 func mustStartDataSync(ctx context.Context, wg *sync.WaitGroup, store store.Writable) {
 	var config dataSync.Config
 	viper.MustUnmarshalKey("sync", &config)
@@ -48,4 +78,13 @@ func mustStartDataSync(ctx context.Context, wg *sync.WaitGroup, store store.Writ
 
 	wg.Add(1)
 	go worker.Run(ctx, wg)
+}
+
+func mustStartRPC(ctx context.Context, wg *sync.WaitGroup, store store.Store) {
+	var config rpc.Config
+	viper.MustUnmarshalKey("rpc", &config)
+
+	wg.Add(2)
+	go rpc.MustServeRPC(ctx, wg, config, store)
+	go rpc.MustServeGRPC(ctx, wg, config, store)
 }
