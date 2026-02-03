@@ -63,7 +63,7 @@ func NewWorker(config Config, store store.Writable) (*Worker, error) {
 }
 
 func (worker *Worker) Run(ctx context.Context, wg *sync.WaitGroup) {
-	wg.Done()
+	defer wg.Done()
 
 	// catch up to the latest finalized at first
 	worker.catchUp(ctx)
