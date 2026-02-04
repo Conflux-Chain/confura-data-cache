@@ -3,7 +3,6 @@ package nearhead
 import (
 	"context"
 
-	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/poll"
 	"github.com/Conflux-Chain/go-conflux-util/health"
@@ -36,10 +35,7 @@ func (writer *Writer) Process(ctx context.Context, data poll.Revertable[evm.Bloc
 		logrus.WithField("blocks", popped).Info("Near head cache popped")
 	}
 
-	convertedData := types.EthBlockData(data.Data)
-	sizedData := types.NewSized(&convertedData)
-
-	err := writer.cache.Put(&sizedData)
+	err := writer.cache.Put(data.Data)
 
 	writer.health.LogOnError(err, "Write near head cache")
 }
