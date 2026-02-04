@@ -4,7 +4,6 @@ go 1.23.0
 
 require (
 	github.com/Conflux-Chain/go-conflux-util v0.7.2
-	github.com/DmitriyVTitov/size v1.5.0
 	github.com/ethereum/go-ethereum v1.15.11
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mcuadros/go-defaults v1.2.0
@@ -23,6 +22,7 @@ require (
 
 require (
 	github.com/DataDog/zstd v1.4.5 // indirect
+	github.com/DmitriyVTitov/size v1.5.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/PagerDuty/go-pagerduty v1.8.0 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
