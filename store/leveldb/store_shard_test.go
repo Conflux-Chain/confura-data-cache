@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	viperUtil "github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/viper"
@@ -70,7 +70,7 @@ func TestShardingStoreWrite(t *testing.T) {
 	assert.Nil(t, store.Write())
 
 	// write continuous blocks to create 2 data stores
-	var datas []types.EthBlockData
+	var datas []evm.BlockData
 	var bn int64
 	for ; bn < int64(defaultTestShardingBlocks+2); bn++ {
 		datas = append(datas, createTestEthData(bn, common.BigToHash(big.NewInt(bn))))
@@ -106,7 +106,7 @@ func TestShardingStoreBreakPoint(t *testing.T) {
 	// write 5 continuous blocks to create 2 data stores:
 	// shard 3: B27, B28, B29
 	// shard 4: B30, B31
-	var datas []types.EthBlockData
+	var datas []evm.BlockData
 	for bn := int64(27); bn <= int64(31); bn++ {
 		datas = append(datas, createTestEthData(bn, common.BigToHash(big.NewInt(bn))))
 	}

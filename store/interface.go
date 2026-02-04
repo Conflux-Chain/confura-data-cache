@@ -2,13 +2,14 @@ package store
 
 import (
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 )
 
 type Writable interface {
 	NextBlockNumber() uint64
-	Write(...types.EthBlockData) error
+	Write(...evm.BlockData) error
 }
 
 type Readable interface {

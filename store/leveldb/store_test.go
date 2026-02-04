@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/stretchr/testify/assert"
@@ -31,7 +31,7 @@ func createTestStore(t *testing.T, defaultNextBlockNumber ...uint64) (*Store, fu
 	}
 }
 
-func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...common.Hash) types.EthBlockData {
+func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...common.Hash) evm.BlockData {
 	// fullnode return empty array instead of nil for following data
 	txs := make([]ethTypes.TransactionDetail, 0, len(txHashes))
 	receipts := make([]*ethTypes.Receipt, 0, len(txHashes))
@@ -68,7 +68,7 @@ func createTestEthData(blockNumber int64, blockHash common.Hash, txHashes ...com
 		})
 	}
 
-	return types.EthBlockData{
+	return evm.BlockData{
 		Block: &ethTypes.Block{
 			Number:       big.NewInt(blockNumber),
 			Hash:         blockHash,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/Conflux-Chain/go-conflux-util/ctxutil"
 	"github.com/Conflux-Chain/go-conflux-util/health"
@@ -34,12 +33,12 @@ func NewWriter(store Writable, option WriteOption) *Writer {
 
 // Process implements process.Processor[evm.BlockData] interface.
 func (writer *Writer) Process(ctx context.Context, data evm.BlockData) {
-	if writer.write(ctx, types.EthBlockData(data)) {
+	if writer.write(ctx, data) {
 		logrus.WithField("block", data.Block.Number).Debug("Succeeded to write block data")
 	}
 }
 
-func (writer *Writer) write(ctx context.Context, data ...types.EthBlockData) bool {
+func (writer *Writer) write(ctx context.Context, data ...evm.BlockData) bool {
 	for {
 		err := writer.store.Write(data...)
 

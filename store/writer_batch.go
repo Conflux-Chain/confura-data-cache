@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/Conflux-Chain/confura-data-cache/types"
 	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/sirupsen/logrus"
 )
@@ -22,7 +21,7 @@ type BatchWriter struct {
 
 	inner *Writer
 
-	buf           []types.EthBlockData
+	buf           []evm.BlockData
 	lastBatchTime time.Time
 }
 
@@ -30,14 +29,14 @@ func NewBatchWriter(store Writable, option BatchWriteOption) *BatchWriter {
 	return &BatchWriter{
 		option:        option,
 		inner:         NewWriter(store, option.WriteOption),
-		buf:           make([]types.EthBlockData, 0, option.BatchSize),
+		buf:           make([]evm.BlockData, 0, option.BatchSize),
 		lastBatchTime: time.Now(),
 	}
 }
 
 // Process implements process.CatchUpProcessor[evm.BlockData] interface.
 func (writer *BatchWriter) Process(ctx context.Context, data evm.BlockData) {
-	writer.buf = append(writer.buf, types.EthBlockData(data))
+	writer.buf = append(writer.buf, data)
 
 	if len(writer.buf) >= writer.option.BatchSize ||
 		time.Since(writer.lastBatchTime) >= writer.option.BatchTimeout {
