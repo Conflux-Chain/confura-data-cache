@@ -80,7 +80,7 @@ func mustStartDataSync(ctx context.Context, wg *sync.WaitGroup, store store.Writ
 	go worker.Run(ctx, wg)
 }
 
-func mustStartRPC(ctx context.Context, wg *sync.WaitGroup, store store.Store) {
+func mustStartRPC(ctx context.Context, wg *sync.WaitGroup, store store.Readable) {
 	var config rpc.Config
 	viper.MustUnmarshalKey("rpc", &config)
 

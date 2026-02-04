@@ -12,14 +12,14 @@ var _ Interface = (*Api)(nil)
 
 // Api is the eth RPC implementation.
 type Api struct {
-	store.Store
+	store.Readable
 
 	blockCache        *lru.Cache[uint64, types.Lazy[*ethTypes.Block]]
 	blockSummaryCache *lru.Cache[uint64, types.Lazy[*ethTypes.Block]]
 }
 
-func NewApi(store store.Store, lruCacheSize int) *Api {
-	api := Api{Store: store}
+func NewApi(store store.Readable, lruCacheSize int) *Api {
+	api := Api{Readable: store}
 	api.blockCache, _ = lru.New[uint64, types.Lazy[*ethTypes.Block]](lruCacheSize)
 	api.blockSummaryCache, _ = lru.New[uint64, types.Lazy[*ethTypes.Block]](lruCacheSize)
 	return &api
@@ -28,7 +28,7 @@ func NewApi(store store.Store, lruCacheSize int) *Api {
 func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[*ethTypes.Block], error) {
 	metrics.GetBlockIsFull().Mark(isFull)
 
-	number, ok, err := api.Store.GetBlockNumber(bhon)
+	number, ok, err := api.Readable.GetBlockNumber(bhon)
 	if err != nil || !ok {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
@@ -46,7 +46,7 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 	}
 
 	// load from store
-	block, err := api.Store.GetBlock(bhon, isFull)
+	block, err := api.Readable.GetBlock(bhon, isFull)
 	if err != nil {
 		return types.Lazy[*ethTypes.Block]{}, err
 	}
@@ -60,7 +60,7 @@ func (api *Api) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (types.Lazy[
 }
 
 func (api *Api) GetTransactionByHash(txHash common.Hash) (types.Lazy[*ethTypes.TransactionDetail], error) {
-	tx, err := api.Store.GetTransactionByHash(txHash)
+	tx, err := api.Readable.GetTransactionByHash(txHash)
 	if err != nil {
 		return types.Lazy[*ethTypes.TransactionDetail]{}, err
 	}
@@ -69,7 +69,7 @@ func (api *Api) GetTransactionByHash(txHash common.Hash) (types.Lazy[*ethTypes.T
 }
 
 func (api *Api) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex uint32) (types.Lazy[*ethTypes.TransactionDetail], error) {
-	tx, err := api.Store.GetTransactionByIndex(bhon, txIndex)
+	tx, err := api.Readable.GetTransactionByIndex(bhon, txIndex)
 	if err != nil {
 		return types.Lazy[*ethTypes.TransactionDetail]{}, err
 	}
@@ -78,7 +78,7 @@ func (api *Api) GetTransactionByIndex(bhon types.BlockHashOrNumber, txIndex uint
 }
 
 func (api *Api) GetTransactionReceipt(txHash common.Hash) (types.Lazy[*ethTypes.Receipt], error) {
-	receipt, err := api.Store.GetTransactionReceipt(txHash)
+	receipt, err := api.Readable.GetTransactionReceipt(txHash)
 	if err != nil {
 		return types.Lazy[*ethTypes.Receipt]{}, err
 	}
@@ -87,7 +87,7 @@ func (api *Api) GetTransactionReceipt(txHash common.Hash) (types.Lazy[*ethTypes.
 }
 
 func (api *Api) GetTransactionTraces(txHash common.Hash) (types.Lazy[[]ethTypes.LocalizedTrace], error) {
-	traces, err := api.Store.GetTransactionTraces(txHash)
+	traces, err := api.Readable.GetTransactionTraces(txHash)
 	if err != nil {
 		return types.Lazy[[]ethTypes.LocalizedTrace]{}, nil
 	}
@@ -96,7 +96,7 @@ func (api *Api) GetTransactionTraces(txHash common.Hash) (types.Lazy[[]ethTypes.
 }
 
 func (api *Api) GetTrace(txHash common.Hash, index uint) (types.Lazy[*ethTypes.LocalizedTrace], error) {
-	trace, err := api.Store.GetTrace(txHash, index)
+	trace, err := api.Readable.GetTrace(txHash, index)
 	if err != nil {
 		return types.Lazy[*ethTypes.LocalizedTrace]{}, nil
 	}

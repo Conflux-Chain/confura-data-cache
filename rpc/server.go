@@ -36,7 +36,7 @@ func DefaultConfig() (config Config) {
 }
 
 // MustServeRPC starts RPC service and wait for graceful shutdown.
-func MustServeRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store store.Store) {
+func MustServeRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store store.Readable) {
 	defer wg.Done()
 
 	listener, err := net.Listen("tcp", config.Endpoint)
@@ -70,7 +70,7 @@ func MustServeRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store 
 }
 
 // MustServeGRPC starts gRPC service and wait for graceful shutdown.
-func MustServeGRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store store.Store) {
+func MustServeGRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store store.Readable) {
 	defer wg.Done()
 
 	listener, err := net.Listen("tcp", config.Proto.Endpoint)
