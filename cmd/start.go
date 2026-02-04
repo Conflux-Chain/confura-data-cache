@@ -16,16 +16,16 @@ import (
 )
 
 var startV2Cmd = &cobra.Command{
-	Use:   "startv2",
+	Use:   "start",
 	Short: "Start data cache service to sync data from fullnode and provides RPC and gRPC service",
-	Run:   startv2,
+	Run:   start,
 }
 
 func init() {
 	rootCmd.AddCommand(startV2Cmd)
 }
 
-func startv2(*cobra.Command, []string) {
+func start(*cobra.Command, []string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 
