@@ -4,12 +4,14 @@ import (
 	"encoding/binary"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
+	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-func (store *Store) writeBlock(batch *leveldb.Batch, data types.EthBlockData) {
+func (store *Store) writeBlock(batch *leveldb.Batch, data evm.BlockData) {
 	// block hash -> block number
 	var blockNumberBuf [8]byte
 	block := data.Block
@@ -20,13 +22,30 @@ func (store *Store) writeBlock(batch *leveldb.Batch, data types.EthBlockData) {
 	store.writeJson(batch, store.keyBlockNumber2BlockPool, blockNumberBuf[:], block)
 
 	// block number -> block summary
-	blockSummary := data.BlockSummary()
+	blockSummary := store.toBlockSummary(data.Block)
 	store.writeJson(batch, store.keyBlockNumber2BlockSummaryPool, blockNumberBuf[:], blockSummary)
 
 	// block number -> transaction count
 	var txCountBuf [8]byte
 	binary.BigEndian.PutUint64(txCountBuf[:], uint64(len(block.Transactions.Transactions())))
 	store.write(batch, store.keyBlockNumber2TxCountPool, blockNumberBuf[:], txCountBuf[:])
+}
+
+func (*Store) toBlockSummary(block *ethTypes.Block) *ethTypes.Block {
+	var hashes []common.Hash
+
+	if txs := block.Transactions.Transactions(); txs != nil {
+		hashes = make([]common.Hash, 0, len(txs))
+
+		for _, tx := range txs {
+			hashes = append(hashes, tx.Hash)
+		}
+	}
+
+	copy := *block
+	copy.Transactions = *ethTypes.NewTxOrHashListByHashes(hashes)
+
+	return &copy
 }
 
 func (store *Store) isBlockNumberInRange(bn uint64) bool {

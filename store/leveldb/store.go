@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/mcuadros/go-defaults"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -143,7 +143,7 @@ func (store *Store) NextBlockNumber() uint64 {
 // Write writes the given block data in batch. It will return error if block data not written in sequence.
 //
 // Note, this method is not thread safe!
-func (store *Store) Write(data ...types.EthBlockData) error {
+func (store *Store) Write(data ...evm.BlockData) error {
 	if len(data) == 0 {
 		return nil
 	}

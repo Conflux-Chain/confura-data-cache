@@ -11,6 +11,7 @@ import (
 	"github.com/Conflux-Chain/confura-data-cache/rpc"
 	"github.com/Conflux-Chain/confura-data-cache/store/leveldb"
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/Conflux-Chain/go-conflux-util/cmd"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/openweb3/web3go"
@@ -47,6 +48,10 @@ func validateLeveldb(*cobra.Command, []string) {
 	client, err := web3go.NewClient(validateLeveldbCmdArgs.url)
 	cmd.FatalIfErr(err, "Failed to create client")
 	defer client.Close()
+
+	adapter, err := evm.NewAdapter(validateLeveldbCmdArgs.url, evm.AdapterOption{})
+	cmd.FatalIfErr(err, "Failed to create EVM adapter")
+	defer adapter.Close()
 
 	// normalize block range
 	blockFrom, blockTo := mustNormalizeBlockRange(client, validateLeveldbCmdArgs.blockFrom, validateLeveldbCmdArgs.numBlocks, ethTypes.FinalizedBlockNumber)
@@ -100,13 +105,13 @@ func validateLeveldb(*cobra.Command, []string) {
 	for i := blockFrom; i <= blockTo; i++ {
 		var data EthBlockDataExt
 
-		data.EthBlockData, err = types.QueryEthBlockData(client, i)
+		data.BlockData, err = adapter.GetBlockData(ctx, i)
 		cmd.FatalIfErr(err, "Failed to query eth block data")
 
 		data.BlockSummary, err = client.Eth.BlockByNumber(ethTypes.NewBlockNumber(int64(i)), false)
 		cmd.FatalIfErr(err, "Failed to query block without txs")
 
-		err = store.Write(data.EthBlockData)
+		err = store.Write(data.BlockData)
 		cmd.FatalIfErr(err, "Failed to write eth block data to store")
 
 		cache[i] = data
@@ -280,6 +285,6 @@ func assertJsonEqual(err error, bn uint64, api string, expected any, actual any,
 }
 
 type EthBlockDataExt struct {
-	types.EthBlockData
+	evm.BlockData
 	BlockSummary *ethTypes.Block // block with only tx hashes
 }

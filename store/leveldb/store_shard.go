@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
 	"github.com/pkg/errors"
@@ -156,7 +157,7 @@ func (store *ShardingStore) NextBlockNumber() uint64 {
 // Write writes the given block data in batch. It will return error if block data not written in sequence.
 //
 // Note, this method is not thread safe!
-func (store *ShardingStore) Write(data ...types.EthBlockData) error {
+func (store *ShardingStore) Write(data ...evm.BlockData) error {
 	shardedData, err := store.parseShardingEthBlockData(data)
 	if err != nil {
 		return err
@@ -173,10 +174,10 @@ func (store *ShardingStore) Write(data ...types.EthBlockData) error {
 
 type shardingEthBlockData struct {
 	Shard uint64
-	Datas []types.EthBlockData
+	Datas []evm.BlockData
 }
 
-func (store *ShardingStore) parseShardingEthBlockData(data []types.EthBlockData) ([]shardingEthBlockData, error) {
+func (store *ShardingStore) parseShardingEthBlockData(data []evm.BlockData) ([]shardingEthBlockData, error) {
 	if len(data) == 0 {
 		return nil, nil
 	}
@@ -202,7 +203,7 @@ func (store *ShardingStore) parseShardingEthBlockData(data []types.EthBlockData)
 
 			current = shardingEthBlockData{
 				Shard: shard,
-				Datas: []types.EthBlockData{v},
+				Datas: []evm.BlockData{v},
 			}
 		}
 

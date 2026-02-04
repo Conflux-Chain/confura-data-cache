@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Conflux-Chain/confura-data-cache/types"
+	"github.com/Conflux-Chain/go-conflux-util/blockchain/sync/evm"
 	"github.com/Conflux-Chain/go-conflux-util/viper"
 	"github.com/ethereum/go-ethereum/common"
 	ethTypes "github.com/openweb3/web3go/types"
@@ -26,7 +27,7 @@ func createTestCache() *EthCache {
 	return cache
 }
 
-func createTestData(t *testing.T) *types.EthBlockData {
+func createTestData(t *testing.T) evm.BlockData {
 	blockJson := "{\"author\":\"0x1247a0ff7a51b3613aacf292c43f8a530f2dbfdf\",\"baseFeePerGas\":\"0x4a817c800\",\"difficulty\":\"0x179abb20a34\",\"extraData\":\"0x\",\"gasLimit\":\"0x1c9c380\",\"gasUsed\":\"0x1cfc8\",\"hash\":\"0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6\",\"logsBloom\":\"0x00000000000000000000000000000000000200000000000000000000000000000040020000080000100000000000000000000000000000000008000000200000000000000000001000000028000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000400010000000000000000001000000000000000000000000000004000000000000000000000000020000000000000000000000000000000000100000000000000080000000000000000002000000000000000000000000000000000000000000010000001000000010000000000000000000000000000000000000000000020000000000000000\",\"miner\":\"0x1247a0ff7a51b3613aacf292c43f8a530f2dbfdf\",\"mixHash\":\"0x0000000000000000000000000000000000000000000000000000000000000000\",\"nonce\":\"0x77505751b096d294\",\"number\":\"0x729c393\",\"parentHash\":\"0x275eb9c8b9c077a4a78a487a2aba08e1d58247d578b668d8558597a8025ff50d\",\"receiptsRoot\":\"0x12af19d53c378426ebe08ad33e48caf3efdaaade0994770c161c0637e65a6566\",\"size\":\"0x11c\",\"stateRoot\":\"0xd57cdf6422c8a9964be8b017adb88ef2288f3e430915038bc5d0c0c91ccf7240\",\"timestamp\":\"0x67f5012a\",\"totalDifficulty\":\"0x0\",\"transactions\":[{\"blockHash\":\"0x5f9cecca56bd3bfda5ba448b36e7f22c9448ed52b2eff79379e38ab5b4c421e6\",\"blockNumber\":\"0x729c393\",\"chainId\":\"0x406\",\"from\":\"0x2d26b1202078e49d036d59451f0da60f645e6df6\",\"gas\":\"0x213e6\",\"gasPrice\":\"0x4a817c800\",\"hash\":\"0x302df74adbc6f7481d341c2e09814b7e777624d05e3caccbc51a351f7749bb19\",\"input\":\"0xc8173c440101984d4c90c00000000000a1d3ec8d000034433d0067f515ec02ca2201f7229fc0abe258d77989205926662e0fd3d2f8f6a4ed97fe170c4d4888c3f0126de4c53627e4a26c0f0d0cd4e4e2b6c3be9c128a11a94ea6b3458529ea8cf09e52e00000000000000000000000002d26b1202078e49d036d59451f0da60f645e6df6000000000000000000000000d9f07924cad1298c6a0f6e510122d5f05074bb4c\",\"maxFeePerGas\":\"0x4a817c800\",\"maxPriorityFeePerGas\":\"0x4a817c800\",\"nonce\":\"0xdf\",\"publicKey\":\"0xee4c346da7b8e0660b8d3ee863d7a13b2c105d9f691cba97c4aab137b1a13a790b886b32be24582ca1f1820df83aef0680523bacd6b763937d531b4058567af8\",\"r\":\"0xae2ed9f10150982b567b054d365c6c56c238d7c619379fbc885274427e6d9060\",\"raw\":\"0x02f9011582040681df8504a817c8008504a817c800830213e69425ab3efd52e6470681ce037cd546dc60726948d380b8a4c8173c440101984d4c90c00000000000a1d3ec8d000034433d0067f515ec02ca2201f7229fc0abe258d77989205926662e0fd3d2f8f6a4ed97fe170c4d4888c3f0126de4c53627e4a26c0f0d0cd4e4e2b6c3be9c128a11a94ea6b3458529ea8cf09e52e00000000000000000000000002d26b1202078e49d036d59451f0da60f645e6df6000000000000000000000000d9f07924cad1298c6a0f6e510122d5f05074bb4cc001a0ae2ed9f10150982b567b054d365c6c56c238d7c619379fbc885274427e6d9060a025922e9f73080970c8bf8f5b93513bbcc3c7cadd45471363fd1129e4d4bda2f5\",\"s\":\"0x25922e9f73080970c8bf8f5b93513bbcc3c7cadd45471363fd1129e4d4bda2f5\",\"standardV\":\"0x1\",\"status\":\"0x1\",\"to\":\"0x25ab3efd52e6470681ce037cd546dc60726948d3\",\"transactionIndex\":\"0x0\",\"type\":\"0x2\",\"v\":\"0x1\",\"value\":\"0x0\",\"yParity\":\"0x1\"}],\"transactionsRoot\":\"0xe9d3b50689d0b0e0f5cef996cc21b1b0cf0013143e76ce00d8863f890f5a8cba\",\"uncles\":[],\"sha3Uncles\":\"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347\"}"
 	block := ethTypes.Block{}
 	err := json.Unmarshal([]byte(blockJson), &block)
@@ -42,15 +43,15 @@ func createTestData(t *testing.T) *types.EthBlockData {
 	err = json.Unmarshal([]byte(tracesJson), &traces)
 	assert.Nil(t, err)
 
-	return &types.EthBlockData{
+	return evm.BlockData{
 		Block:    &block,
 		Receipts: rcpts,
 		Traces:   traces,
 	}
 }
 
-func createTestDataBatch(t *testing.T, size int) []types.EthBlockData {
-	datas := make([]types.EthBlockData, 0, size)
+func createTestDataBatch(t *testing.T, size int) []evm.BlockData {
+	datas := make([]evm.BlockData, 0, size)
 	for i := 0; i < size; i++ {
 		data := createTestData(t)
 		data.Block.Number = incrNumber(data.Block.Number, int64(i))
@@ -65,7 +66,7 @@ func createTestDataBatch(t *testing.T, size int) []types.EthBlockData {
 				log.TxHash = tx.Hash
 			}
 		}
-		datas = append(datas, *data)
+		datas = append(datas, data)
 	}
 	return datas
 }
@@ -101,22 +102,20 @@ func incrHash(hash common.Hash, val ...int64) common.Hash {
 func TestEthCache_Put(t *testing.T) {
 	// add one block
 	cache := createTestCache()
-	blockData := createTestData(t)
-	data := types.NewSized(blockData)
-	assert.Nil(t, cache.Put(&data))
+	data := createTestData(t)
+	assert.Nil(t, cache.Put(data))
 	assert.Equal(t, cache.start, uint64(120177555))
 	assert.Equal(t, cache.end, uint64(120177556))
-	assert.Equal(t, cache.currentSize, uint64(data.Size))
+	assert.Equal(t, cache.currentSize, uint64(data.Size()))
 
 	// not cached in sequence
-	blockData2 := createTestData(t)
-	blockData2.Block.Number = incrNumber(blockData2.Block.Number, int64(2))
-	blockData2.Block.Hash = incrHash(blockData2.Block.Hash, int64(2))
-	for _, tx := range blockData2.Block.Transactions.Transactions() {
+	data2 := createTestData(t)
+	data2.Block.Number = incrNumber(data2.Block.Number, int64(2))
+	data2.Block.Hash = incrHash(data2.Block.Hash, int64(2))
+	for _, tx := range data2.Block.Transactions.Transactions() {
 		tx.Hash = incrHash(tx.Hash, int64(2))
 	}
-	data2 := types.NewSized(blockData2)
-	assert.ErrorContains(t, cache.Put(&data2), "Block data not cached in sequence")
+	assert.ErrorContains(t, cache.Put(data2), "Block data not cached in sequence")
 
 	// evict one block
 	cache.evict()
@@ -134,9 +133,8 @@ func TestEthCache_Put(t *testing.T) {
 	cache = createTestCache()
 	batchBlocks := 100
 	datas := createTestDataBatch(t, batchBlocks)
-	for _, blockData := range datas {
-		data := types.NewSized(&blockData)
-		assert.Nil(t, cache.Put(&data))
+	for _, data := range datas {
+		assert.Nil(t, cache.Put(data))
 	}
 	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
 	assert.Greater(t, cache.currentSize, uint64(0))
@@ -162,9 +160,8 @@ func TestEthCache_Put(t *testing.T) {
 	assert.Equal(t, n, len(txInput))
 
 	datas[batchBlocks-1].Block.Transactions.Transactions()[0].Input = txInput
-	for _, blockData := range datas {
-		data := types.NewSized(&blockData)
-		assert.Nil(t, cache.Put(&data))
+	for _, data := range datas {
+		assert.Nil(t, cache.Put(data))
 	}
 	assert.Equal(t, cache.end-cache.start, uint64(1))
 	assert.Greater(t, cache.currentSize, cache.config.MaxMemory)
@@ -174,9 +171,8 @@ func TestEthCache_Pop(t *testing.T) {
 	cache := createTestCache()
 	batchBlocks := 10
 	datas := createTestDataBatch(t, batchBlocks)
-	for _, blockData := range datas {
-		data := types.NewSized(&blockData)
-		assert.Nil(t, cache.Put(&data))
+	for _, data := range datas {
+		assert.Nil(t, cache.Put(data))
 	}
 	assert.Equal(t, cache.start, uint64(120177555))
 	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
@@ -214,10 +210,9 @@ func TestEthCache_Pop(t *testing.T) {
 
 func TestEthCache_GetBlockByHash(t *testing.T) {
 	cache := createTestCache()
-	blockData := createTestData(t)
-	data := types.NewSized(blockData)
-	assert.Len(t, blockData.Block.Transactions.Transactions(), 1)
-	assert.Nil(t, cache.Put(&data))
+	data := createTestData(t)
+	assert.Len(t, data.Block.Transactions.Transactions(), 1)
+	assert.Nil(t, cache.Put(data))
 
 	// get block by hash with tx details
 
@@ -241,9 +236,8 @@ func TestEthCache_GetBlockByHash(t *testing.T) {
 
 func TestEthCache_GetBlockByNumber(t *testing.T) {
 	cache := createTestCache()
-	blockData := createTestData(t)
-	data := types.NewSized(blockData)
-	assert.Nil(t, cache.Put(&data))
+	data := createTestData(t)
+	assert.Nil(t, cache.Put(data))
 
 	// get block by number with tx details
 	block := cache.GetBlock(types.BlockHashOrNumberWithNumber(120177555), false)
@@ -266,9 +260,8 @@ func TestEthCache_GetBlockByNumber(t *testing.T) {
 
 func TestEthCache_GetTransactionByHash(t *testing.T) {
 	cache := createTestCache()
-	blockData := createTestData(t)
-	data := types.NewSized(blockData)
-	assert.Nil(t, cache.Put(&data))
+	data := createTestData(t)
+	assert.Nil(t, cache.Put(data))
 
 	tx := cache.GetTransactionByHash(common.HexToHash("0x302df74adbc6f7481d341c2e09814b7e777624d05e3caccbc51a351f7749bb19"))
 	assert.NotNil(t, tx)
@@ -282,9 +275,8 @@ func TestEthCache_GetTransactionByHash(t *testing.T) {
 
 func TestEthCache_GetBlockReceipts(t *testing.T) {
 	cache := createTestCache()
-	blockData := createTestData(t)
-	data := types.NewSized(blockData)
-	assert.Nil(t, cache.Put(&data))
+	data := createTestData(t)
+	assert.Nil(t, cache.Put(data))
 
 	// get block receipts by number
 	receipts := cache.GetBlockReceipts(types.BlockHashOrNumberWithNumber(120177555))
@@ -313,9 +305,8 @@ func TestEthCache_GetBlockReceipts(t *testing.T) {
 
 func TestEthCache_GetTransactionReceipt(t *testing.T) {
 	cache := createTestCache()
-	blockData := createTestData(t)
-	data := types.NewSized(blockData)
-	assert.Nil(t, cache.Put(&data))
+	data := createTestData(t)
+	assert.Nil(t, cache.Put(data))
 
 	receipt := cache.GetTransactionReceipt(common.HexToHash("0x302df74adbc6f7481d341c2e09814b7e777624d05e3caccbc51a351f7749bb19"))
 	assert.NotNil(t, receipt)
@@ -330,9 +321,8 @@ func TestEthCache_GetTransactionReceipt(t *testing.T) {
 
 func TestEthCache_GetBlockTraces(t *testing.T) {
 	cache := createTestCache()
-	blockData := createTestData(t)
-	data := types.NewSized(blockData)
-	assert.Nil(t, cache.Put(&data))
+	data := createTestData(t)
+	assert.Nil(t, cache.Put(data))
 
 	// get block traces by number
 	traces := cache.GetBlockTraces(types.BlockHashOrNumberWithNumber(120177555))
@@ -359,9 +349,8 @@ func TestEthCache_GetBlockTraces(t *testing.T) {
 
 func TestEthCache_GetTransactionTraces(t *testing.T) {
 	cache := createTestCache()
-	blockData := createTestData(t)
-	data := types.NewSized(blockData)
-	assert.Nil(t, cache.Put(&data))
+	data := createTestData(t)
+	assert.Nil(t, cache.Put(data))
 
 	traces := cache.GetTransactionTraces(common.HexToHash("0x302df74adbc6f7481d341c2e09814b7e777624d05e3caccbc51a351f7749bb19"))
 	assert.NotNil(t, traces)
@@ -380,9 +369,8 @@ func TestEthCache_GetLogs(t *testing.T) {
 	// batch put block datas
 	batchBlocks := 10
 	datas := createTestDataBatch(t, batchBlocks)
-	for _, blockData := range datas {
-		data := types.NewSized(&blockData)
-		assert.Nil(t, cache.Put(&data))
+	for _, data := range datas {
+		assert.Nil(t, cache.Put(data))
 	}
 	assert.Equal(t, cache.end, uint64(120177555+batchBlocks))
 	assert.Greater(t, cache.currentSize, uint64(0))
