@@ -3,7 +3,7 @@ module github.com/Conflux-Chain/confura-data-cache
 go 1.23.0
 
 require (
-	github.com/Conflux-Chain/go-conflux-util v0.7.2
+	github.com/Conflux-Chain/go-conflux-util v0.7.3
 	github.com/ethereum/go-ethereum v1.15.11
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mcuadros/go-defaults v1.2.0

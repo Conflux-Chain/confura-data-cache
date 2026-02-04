@@ -33,8 +33,8 @@ cloud.google.com/go/storage v1.10.0/go.mod h1:FLPqc6j+Ki4BU591ie1oL6qBQGu2Bl/tZ9
 dmitri.shuralyov.com/gpu/mtl v0.0.0-20190408044501-666a987793e9/go.mod h1:H6x//7gZCb22OMCxBHrMx7a5I7Hp++hsVxbQ4BYO7hU=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/Conflux-Chain/go-conflux-util v0.7.2 h1:Ai9m33YmD/rvevbi95PYGaRhDf7ZinErAfmHOl2tYes=
-github.com/Conflux-Chain/go-conflux-util v0.7.2/go.mod h1:JujW3dd5moi4Vgusd3Xwqbw5sW89MuatoyUSVf/J9Yk=
+github.com/Conflux-Chain/go-conflux-util v0.7.3 h1:lmDG0Ou5/1CVMJake8cZ2ys/fmUbP8SZ0AzmZ7ZZ4oU=
+github.com/Conflux-Chain/go-conflux-util v0.7.3/go.mod h1:JujW3dd5moi4Vgusd3Xwqbw5sW89MuatoyUSVf/J9Yk=
 github.com/DataDog/zstd v1.4.5 h1:EndNeuB0l9syBZhut0wns3gV1hL8zX8LIu6ZiVHWLIQ=
 github.com/DataDog/zstd v1.4.5/go.mod h1:1jcaCB/ufaK+sKp1NBhlGmpz41jOoPQ35bpF36t7BBo=
 github.com/DmitriyVTitov/size v1.5.0 h1:/PzqxYrOyOUX1BXj6J9OuVRVGe+66VL4D9FlUaW515g=
