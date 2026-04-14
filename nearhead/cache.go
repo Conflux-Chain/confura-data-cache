@@ -134,9 +134,13 @@ func (c *EthCache) del(bn uint64) {
 }
 
 // GetBlock returns block with given number or hash.
-func (c *EthCache) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (result EthCacheResultWithCoverage[*ethTypes.Block]) {
+func (c *EthCache) GetBlock(bhon types.BlockHashOrNumber, isFull bool) EthCacheResultWithCoverage[*ethTypes.Block] {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
+
+	result := EthCacheResultWithCoverage[*ethTypes.Block]{
+		Coverage: [2]uint64{c.start, c.end},
+	}
 
 	blockNumber := c.getBlockNumber(bhon)
 	if blockNumber == nil {
@@ -149,10 +153,8 @@ func (c *EthCache) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (result E
 	}
 
 	if isFull {
-		return EthCacheResultWithCoverage[*ethTypes.Block]{
-			Result:   data.Block,
-			Coverage: [2]uint64{c.start, c.end},
-		}
+		result.Result = data.Block
+		return result
 	}
 
 	txs := data.Block.Transactions.Transactions()
@@ -165,10 +167,8 @@ func (c *EthCache) GetBlock(bhon types.BlockHashOrNumber, isFull bool) (result E
 	block := *data.Block
 	block.Transactions = *txOrHashList
 
-	return EthCacheResultWithCoverage[*ethTypes.Block]{
-		Result:   &block,
-		Coverage: [2]uint64{c.start, c.end},
-	}
+	result.Result = &block
+	return result
 }
 
 // GetTransactionByHash returns transaction with given transaction hash.
@@ -191,9 +191,13 @@ func (c *EthCache) GetTransactionByHash(txHash common.Hash) *ethTypes.Transactio
 }
 
 // GetBlockReceipts returns the receipts of a given block number or hash.
-func (c *EthCache) GetBlockReceipts(bhon types.BlockHashOrNumber) (result EthCacheResultWithCoverage[[]*ethTypes.Receipt]) {
+func (c *EthCache) GetBlockReceipts(bhon types.BlockHashOrNumber) EthCacheResultWithCoverage[[]*ethTypes.Receipt] {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
+
+	result := EthCacheResultWithCoverage[[]*ethTypes.Receipt]{
+		Coverage: [2]uint64{c.start, c.end},
+	}
 
 	blockNumber := c.getBlockNumber(bhon)
 	if blockNumber == nil {
@@ -205,10 +209,8 @@ func (c *EthCache) GetBlockReceipts(bhon types.BlockHashOrNumber) (result EthCac
 		return result
 	}
 
-	return EthCacheResultWithCoverage[[]*ethTypes.Receipt]{
-		Result:   data.Receipts,
-		Coverage: [2]uint64{c.start, c.end},
-	}
+	result.Result = data.Receipts
+	return result
 }
 
 // GetTransactionReceipt returns transaction receipt by transaction hash.
@@ -230,9 +232,13 @@ func (c *EthCache) GetTransactionReceipt(txHash common.Hash) *ethTypes.Receipt {
 }
 
 // GetBlockTraces returns all traces produced at given block by number or hash
-func (c *EthCache) GetBlockTraces(bhon types.BlockHashOrNumber) (result EthCacheResultWithCoverage[[]ethTypes.LocalizedTrace]) {
+func (c *EthCache) GetBlockTraces(bhon types.BlockHashOrNumber) EthCacheResultWithCoverage[[]ethTypes.LocalizedTrace] {
 	c.rwMutex.RLock()
 	defer c.rwMutex.RUnlock()
+
+	result := EthCacheResultWithCoverage[[]ethTypes.LocalizedTrace]{
+		Coverage: [2]uint64{c.start, c.end},
+	}
 
 	blockNumber := c.getBlockNumber(bhon)
 	if blockNumber == nil {
@@ -244,10 +250,8 @@ func (c *EthCache) GetBlockTraces(bhon types.BlockHashOrNumber) (result EthCache
 		return result
 	}
 
-	return EthCacheResultWithCoverage[[]ethTypes.LocalizedTrace]{
-		Result:   data.Traces,
-		Coverage: [2]uint64{c.start, c.end},
-	}
+	result.Result = data.Traces
+	return result
 }
 
 // GetTransactionTraces returns all traces of given transaction.
