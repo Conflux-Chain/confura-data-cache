@@ -27,7 +27,7 @@ func NewWriter(cache *EthCache, option WriteOption) *Writer {
 }
 
 // Process implements process.Processor[poll.Revertable[evm.BlockData]] interface.
-func (writer *Writer) Process(ctx context.Context, data poll.Revertable[evm.BlockData]) {
+func (writer *Writer) Process(ctx context.Context, data poll.Revertable[evm.BlockData]) bool {
 	blockNumber := data.Data.Block.Number.Uint64()
 
 	if data.Reverted {
@@ -38,4 +38,6 @@ func (writer *Writer) Process(ctx context.Context, data poll.Revertable[evm.Bloc
 	err := writer.cache.Put(data.Data)
 
 	writer.health.LogOnError(err, "Write near head cache")
+
+	return true
 }

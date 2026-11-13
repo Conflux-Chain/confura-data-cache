@@ -27,17 +27,24 @@ func StartNearHead(ctx context.Context, wg *sync.WaitGroup, config NearHeadConfi
 	}
 
 	// sync from the finalized block that will never be reverted
-	finalizedBlockNumber, err := adapter.GetFinalizedBlockNumber(ctx)
+	finalizedBlockNumber, finalizedBlockHash, err := adapter.GetFinalizedBlock(ctx)
 	if err != nil {
 		return nil, errors.WithMessage(err, "Failed to retrieve finalized block number")
 	}
 
-	cache := nearhead.NewEthCache(config.Cache)
+	reorgWindowParams := poll.ReorgWindowParams{
+		FinalizedBlockNumber: finalizedBlockNumber,
+		FinalizedBlockHash:   finalizedBlockHash,
+	}
+	poller, err := poll.NewLatestPoller(adapter, reorgWindowParams, config.Poller)
+	if err != nil {
+		return nil, errors.WithMessage(err, "Failed to create LatestPoller")
+	}
 
-	poller := poll.NewLatestPoller(adapter, finalizedBlockNumber, poll.ReorgWindowParams{}, config.Poller)
 	wg.Add(1)
 	go poller.Poll(ctx, wg)
 
+	cache := nearhead.NewEthCache(config.Cache)
 	writer := nearhead.NewWriter(cache, config.Writer)
 	wg.Add(1)
 	go process.Process(ctx, wg, poller.DataCh(), writer)
