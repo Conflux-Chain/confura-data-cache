@@ -35,13 +35,15 @@ func NewBatchWriter(store Writable, option BatchWriteOption) *BatchWriter {
 }
 
 // Process implements process.CatchUpProcessor[evm.BlockData] interface.
-func (writer *BatchWriter) Process(ctx context.Context, data evm.BlockData) {
+func (writer *BatchWriter) Process(ctx context.Context, data evm.BlockData) bool {
 	writer.buf = append(writer.buf, data)
 
-	if len(writer.buf) >= writer.option.BatchSize ||
-		time.Since(writer.lastBatchTime) >= writer.option.BatchTimeout {
-		writer.write(ctx)
+	if len(writer.buf) < writer.option.BatchSize &&
+		time.Since(writer.lastBatchTime) < writer.option.BatchTimeout {
+		return true
 	}
+
+	return writer.write(ctx)
 }
 
 // Process implements process.CatchUpProcessor[evm.BlockData] interface.
@@ -51,15 +53,19 @@ func (writer *BatchWriter) OnCatchedUp(ctx context.Context) {
 	}
 }
 
-func (writer *BatchWriter) write(ctx context.Context) {
-	if writer.inner.write(ctx, writer.buf...) {
-		logrus.WithFields(logrus.Fields{
-			"blocks":   len(writer.buf),
-			"interval": time.Since(writer.lastBatchTime),
-			"latest":   writer.buf[len(writer.buf)-1].Block.Number,
-		}).Debug("Succeeded to write block data in batch")
-
-		writer.buf = writer.buf[:0]
-		writer.lastBatchTime = time.Now()
+func (writer *BatchWriter) write(ctx context.Context) bool {
+	if !writer.inner.write(ctx, writer.buf...) {
+		return false
 	}
+
+	logrus.WithFields(logrus.Fields{
+		"blocks":   len(writer.buf),
+		"interval": time.Since(writer.lastBatchTime),
+		"latest":   writer.buf[len(writer.buf)-1].Block.Number,
+	}).Debug("Succeeded to write block data in batch")
+
+	writer.buf = writer.buf[:0]
+	writer.lastBatchTime = time.Now()
+
+	return true
 }

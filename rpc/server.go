@@ -57,7 +57,7 @@ func MustServeRPC(ctx context.Context, wg *sync.WaitGroup, config Config, store 
 
 	server := http.Server{
 		Addr:    config.Endpoint,
-		Handler: node.NewHTTPHandlerStack(handler, config.Cors, config.VirtualHosts, jwtSecret),
+		Handler: node.NewHTTPHandlerStack(handler, config.Cors, config.VirtualHosts, jwtSecret, false),
 	}
 
 	go server.Serve(listener)
