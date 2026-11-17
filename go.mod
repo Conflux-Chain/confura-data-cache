@@ -3,7 +3,7 @@ module github.com/Conflux-Chain/confura-data-cache
 go 1.26.11
 
 require (
-	github.com/Conflux-Chain/go-conflux-util v0.8.2
+	github.com/Conflux-Chain/go-conflux-util v0.8.3
 	github.com/ethereum/go-ethereum v1.17.10
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/mcuadros/go-defaults v1.2.0
@@ -128,9 +128,10 @@ require (
 	github.com/wlynxg/anet v0.0.5 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/otel v1.46.0 // indirect
-	go.opentelemetry.io/otel/metric v1.46.0 // indirect
-	go.opentelemetry.io/otel/trace v1.46.0 // indirect
+	go.opentelemetry.io/otel v1.47.0 // indirect
+	go.opentelemetry.io/otel/log v1.47.0 // indirect
+	go.opentelemetry.io/otel/metric v1.47.0 // indirect
+	go.opentelemetry.io/otel/trace v1.47.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
